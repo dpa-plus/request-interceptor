@@ -1,0 +1,163 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model RequestLog {
+  id            String   @id @default(cuid())
+
+  // Request
+  method        String
+  url           String
+  path          String
+  queryParams   String?  // JSON
+  headers       String   // JSON
+  body          String?
+  bodyTruncated Boolean  @default(false)
+  bodySize      Int      @default(0)
+
+  // Response
+  statusCode    Int?
+  responseHeaders String? // JSON
+  responseBody  String?
+  responseTruncated Boolean @default(false)
+  responseSize  Int      @default(0)
+  responseTime  Int?     // ms
+
+  // Routing
+  targetUrl     String
+  routeSource   String   // "query_param" | "config_rule" | "default"
+  routeRuleId   String?  // Falls Config-Regel
+
+  // AI-spezifisch
+  isAiRequest   Boolean  @default(false)
+  aiRequestId   String?  @unique
+
+  // Meta
+  createdAt     DateTime @default(now())
+  error         String?
+
+  aiRequest     AiRequest? @relation(fields: [aiRequestId], references: [id])
+
+  @@index([createdAt])
+  @@index([method])
+  @@index([isAiRequest])
+  @@index([targetUrl])
+}
+
+model AiRequest {
+  id              String   @id @default(cuid())
+
+  // Request Details
+  provider        String   // "openai" | "anthropic" | "azure" | "openrouter" | "custom"
+  endpoint        String   // z.B. "/v1/chat/completions"
+  model           String?
+  isStreaming     Boolean  @default(false)
+
+  // Messages (vereinfacht für Übersicht)
+  systemPrompt    String?
+  userMessages    String?  // JSON Array
+  assistantResponse String?
+
+  // Vollständiger Request/Response als JSON
+  fullRequest     String?  // JSON
+  fullResponse    String?  // JSON (oder gesammelte Chunks)
+
+  // Usage & Costs (initial from response, may be updated by OpenRouter enrichment)
+  promptTokens    Int?
+  completionTokens Int?
+  totalTokens     Int?
+
+  // Pricing (in USD, gespeichert als Mikro-Dollar für Präzision)
+  inputCostMicros  Int?
+  outputCostMicros Int?
+  totalCostMicros  Int?
+
+  // Timing
+  timeToFirstToken Int?    // ms (für Streaming)
+  totalDuration    Int?    // ms
+
+  // OpenRouter-specific fields (populated via async enrichment)
+  openrouterGenerationId    String?   // ID from OpenRouter response
+  openrouterEnriched        Boolean   @default(false)  // Whether enrichment completed
+  openrouterEnrichedAt      DateTime? // When enrichment was done
+  openrouterProviderName    String?   // Actual provider that served the request
+  openrouterUpstreamId      String?   // Provider's generation ID
+  openrouterTotalCost       Float?    // Exact cost from OpenRouter (USD)
+  openrouterCacheDiscount   Float?    // Cache discount applied
+  openrouterLatency         Int?      // Total latency ms
+  openrouterGenerationTime  Int?      // Generation time ms
+  openrouterModerationLatency Int?    // Moderation latency ms
+  openrouterNativeTokensPrompt     Int?  // Native prompt tokens
+  openrouterNativeTokensCompletion Int?  // Native completion tokens
+  openrouterNativeTokensReasoning  Int?  // Reasoning tokens (for o1, etc.)
+  openrouterNativeTokensCached     Int?  // Cached tokens
+  openrouterFinishReason    String?   // Finish reason
+  openrouterIsByok          Boolean?  // Bring-your-own-key
+  openrouterRawResponse     String?   // Full generation API response (JSON)
+
+  // Meta
+  createdAt       DateTime @default(now())
+
+  requestLog      RequestLog?
+
+  @@index([provider])
+  @@index([model])
+  @@index([createdAt])
+  @@index([openrouterGenerationId])
+}
+
+model RoutingRule {
+  id          String   @id @default(cuid())
+  name        String
+  priority    Int      @default(0)  // Höher = wird zuerst geprüft
+  enabled     Boolean  @default(true)
+
+  // Matching
+  matchType   String   // "path_regex" | "header_regex" | "path_prefix"
+  matchPattern String
+  matchHeader String?  // Nur für header_regex
+
+  // Target
+  targetUrl   String
+
+  // Meta
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([enabled, priority])
+}
+
+model Config {
+  id            String  @id @default("default")
+
+  // Fallback wenn keine Regel matched
+  defaultTargetUrl String?
+
+  // Logging Settings
+  logEnabled    Boolean @default(true)
+  maxBodySize   Int     @default(1048576)  // 1MB default
+
+  // AI Detection
+  aiDetectionEnabled Boolean @default(true)
+
+  updatedAt     DateTime @updatedAt
+}
+
+model AiModelPricing {
+  id              String @id @default(cuid())
+  provider        String
+  modelPattern    String  // Regex Pattern für Model-Namen
+  inputPricePerMillion  Int  // Mikro-Dollar pro 1M Tokens
+  outputPricePerMillion Int
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([provider, modelPattern])
+}

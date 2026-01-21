@@ -1,0 +1,33 @@
+services:
+  request-interceptor:
+    build: .
+    ports:
+      - "3100:3000"  # Admin Dashboard
+      - "3101:3001"  # Proxy
+    environment:
+      - NODE_ENV=production
+      - PORT_ADMIN=3000
+      - PORT_PROXY=3001
+      - DATABASE_URL=file:/data/app.db
+      - TARGET_URL=${TARGET_URL:-http://host.docker.internal:8080}
+      - ADMIN_USER=${ADMIN_USER:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
+    volumes:
+      - interceptor-data:/data
+    restart: unless-stopped
+    labels:
+      # Traefik
+      - "traefik.enable=true"
+      # Admin Dashboard (Port 3000)
+      - "traefik.http.routers.interceptor-admin.rule=Host(`interceptor-admin.example.com`)"
+      - "traefik.http.routers.interceptor-admin.service=interceptor-admin"
+      - "traefik.http.services.interceptor-admin.loadbalancer.server.port=3000"
+      # Proxy (Port 3001)
+      - "traefik.http.routers.interceptor-proxy.rule=Host(`interceptor-proxy.example.com`)"
+      - "traefik.http.routers.interceptor-proxy.service=interceptor-proxy"
+      - "traefik.http.services.interceptor-proxy.loadbalancer.server.port=3001"
+      # Watchtower
+      - "com.centurylinklabs.watchtower.enable=true"
+
+volumes:
+  interceptor-data:
