@@ -20,14 +20,44 @@ const AI_ENDPOINT_PATTERNS = AI_ENDPOINTS.map(ep => new RegExp(`${ep.replace('/'
 
 export type AiProvider = 'openai' | 'anthropic' | 'azure' | 'openrouter' | 'custom';
 
+// Tool call structure (OpenAI format)
+export interface ToolCall {
+  id: string;
+  type: 'function';
+  function: {
+    name: string;
+    arguments: string; // JSON string
+  };
+}
+
+// Unified message structure for conversation view
+export interface ConversationMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string | null;
+  // For assistant messages with tool calls
+  toolCalls?: ToolCall[];
+  // For tool result messages
+  toolCallId?: string;
+  toolName?: string;
+  // For multimodal content
+  hasImages?: boolean;
+  imageCount?: number;
+}
+
 export interface ParsedAiRequest {
   provider: AiProvider;
   endpoint: string;
   model: string | null;
   isStreaming: boolean;
   systemPrompt: string | null;
-  userMessages: string[]; // Just the content strings
+  userMessages: string[]; // Just the content strings (legacy, for backwards compatibility)
   fullRequest: any;
+  // New: full conversation with all message types
+  messages: ConversationMessage[];
+  // Tool-related metadata
+  hasToolCalls: boolean;
+  toolCallCount: number;
+  toolNames: string[];
 }
 
 export interface ParsedAiResponse {
@@ -107,23 +137,93 @@ export function parseAiRequest(body: any, path: string, targetUrl: string, heade
 
   let systemPrompt: string | null = null;
   const userMessages: string[] = [];
+  const messages: ConversationMessage[] = [];
+  const toolNames: Set<string> = new Set();
+  let toolCallCount = 0;
   let model: string | null = body?.model || null;
 
   // Parse messages for chat completions
   if (Array.isArray(body?.messages)) {
     for (const msg of body.messages) {
-      if (msg.role === 'system') {
+      const role = msg.role as string;
+
+      if (role === 'system') {
         systemPrompt = extractContent(msg.content);
-      } else if (msg.role === 'user') {
+        messages.push({
+          role: 'system',
+          content: systemPrompt,
+        });
+      } else if (role === 'user') {
         const content = extractContent(msg.content);
+        const imageInfo = extractImageInfo(msg.content);
         if (content) userMessages.push(content);
+        messages.push({
+          role: 'user',
+          content,
+          hasImages: imageInfo.hasImages,
+          imageCount: imageInfo.imageCount,
+        });
+      } else if (role === 'assistant') {
+        const content = extractContent(msg.content);
+        const parsedToolCalls = parseToolCalls(msg.tool_calls || msg.function_call);
+
+        // Collect tool names
+        if (parsedToolCalls) {
+          for (const tc of parsedToolCalls) {
+            toolNames.add(tc.function.name);
+            toolCallCount++;
+          }
+        }
+
+        messages.push({
+          role: 'assistant',
+          content,
+          toolCalls: parsedToolCalls || undefined,
+        });
+      } else if (role === 'tool') {
+        // Tool result message
+        messages.push({
+          role: 'tool',
+          content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+          toolCallId: msg.tool_call_id,
+          toolName: msg.name,
+        });
+      } else if (role === 'function') {
+        // Legacy function role (deprecated but still used)
+        messages.push({
+          role: 'tool',
+          content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+          toolName: msg.name,
+        });
       }
     }
   }
 
-  // Anthropic format
+  // Anthropic format - system is separate
   if (body?.system) {
     systemPrompt = typeof body.system === 'string' ? body.system : JSON.stringify(body.system);
+    // Insert system message at the beginning if not already present
+    if (messages.length === 0 || messages[0].role !== 'system') {
+      messages.unshift({
+        role: 'system',
+        content: systemPrompt,
+      });
+    }
+  }
+
+  // Anthropic format - parse tool_use and tool_result in content blocks
+  if (Array.isArray(body?.messages)) {
+    for (let i = 0; i < body.messages.length; i++) {
+      const msg = body.messages[i];
+      if (Array.isArray(msg.content)) {
+        for (const block of msg.content) {
+          if (block.type === 'tool_use') {
+            toolNames.add(block.name);
+            toolCallCount++;
+          }
+        }
+      }
+    }
   }
 
   return {
@@ -134,6 +234,61 @@ export function parseAiRequest(body: any, path: string, targetUrl: string, heade
     systemPrompt,
     userMessages,
     fullRequest: body,
+    messages,
+    hasToolCalls: toolCallCount > 0,
+    toolCallCount,
+    toolNames: Array.from(toolNames),
+  };
+}
+
+/**
+ * Parse tool calls from OpenAI format
+ */
+function parseToolCalls(toolCallsOrFunctionCall: any): ToolCall[] | null {
+  if (!toolCallsOrFunctionCall) return null;
+
+  // Modern tool_calls array
+  if (Array.isArray(toolCallsOrFunctionCall)) {
+    return toolCallsOrFunctionCall.map((tc: any) => ({
+      id: tc.id || '',
+      type: 'function' as const,
+      function: {
+        name: tc.function?.name || '',
+        arguments: tc.function?.arguments || '{}',
+      },
+    }));
+  }
+
+  // Legacy function_call object
+  if (toolCallsOrFunctionCall.name) {
+    return [{
+      id: 'legacy',
+      type: 'function',
+      function: {
+        name: toolCallsOrFunctionCall.name,
+        arguments: toolCallsOrFunctionCall.arguments || '{}',
+      },
+    }];
+  }
+
+  return null;
+}
+
+/**
+ * Extract image information from multimodal content
+ */
+function extractImageInfo(content: any): { hasImages: boolean; imageCount: number } {
+  if (!Array.isArray(content)) {
+    return { hasImages: false, imageCount: 0 };
+  }
+
+  const imageCount = content.filter(
+    (part: any) => part.type === 'image_url' || part.type === 'image'
+  ).length;
+
+  return {
+    hasImages: imageCount > 0,
+    imageCount,
   };
 }
 

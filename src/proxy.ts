@@ -301,6 +301,11 @@ async function handleStreamingResponse(
         assistantResponse: parsedResponse.assistantResponse,
         fullRequest: safeJsonStringify(parsedAiReq.fullRequest),
         fullResponse: safeJsonStringify(parsedResponse.fullResponse),
+        // Full conversation with all message types
+        messages: safeJsonStringify(parsedAiReq.messages),
+        hasToolCalls: parsedAiReq.hasToolCalls,
+        toolCallCount: parsedAiReq.toolCallCount > 0 ? parsedAiReq.toolCallCount : null,
+        toolNames: parsedAiReq.toolNames.length > 0 ? safeJsonStringify(parsedAiReq.toolNames) : null,
         promptTokens: parsedResponse.promptTokens,
         completionTokens: parsedResponse.completionTokens,
         totalTokens: parsedResponse.totalTokens,
@@ -424,6 +429,11 @@ async function handleRegularResponse(
           assistantResponse: parsedResponse.assistantResponse,
           fullRequest: safeJsonStringify(parsedAiReq.fullRequest),
           fullResponse: safeJsonStringify(parsedResponse.fullResponse),
+          // Full conversation with all message types
+          messages: safeJsonStringify(parsedAiReq.messages),
+          hasToolCalls: parsedAiReq.hasToolCalls,
+          toolCallCount: parsedAiReq.toolCallCount > 0 ? parsedAiReq.toolCallCount : null,
+          toolNames: parsedAiReq.toolNames.length > 0 ? safeJsonStringify(parsedAiReq.toolNames) : null,
           promptTokens: parsedResponse.promptTokens,
           completionTokens: parsedResponse.completionTokens,
           totalTokens: parsedResponse.totalTokens,

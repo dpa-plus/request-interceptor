@@ -59,10 +59,18 @@ model AiRequest {
   model           String?
   isStreaming     Boolean  @default(false)
 
-  // Messages (vereinfacht für Übersicht)
+  // Messages (vereinfacht für Übersicht - Legacy)
   systemPrompt    String?
   userMessages    String?  // JSON Array
   assistantResponse String?
+
+  // Full conversation with all message types (system, user, assistant, tool)
+  messages        String?  // JSON Array of ConversationMessage objects
+
+  // Tool-call metadata
+  hasToolCalls    Boolean  @default(false)
+  toolCallCount   Int?
+  toolNames       String?  // JSON Array of tool names used
 
   // Vollständiger Request/Response als JSON
   fullRequest     String?  // JSON

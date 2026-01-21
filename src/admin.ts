@@ -177,7 +177,11 @@ export function createAdminApp() {
             timeToFirstToken: true,
             totalDuration: true,
             createdAt: true,
-            // OpenRouter-specific fields (cast to any for new schema fields)
+            // Tool-call metadata
+            hasToolCalls: true,
+            toolCallCount: true,
+            toolNames: true,
+            // OpenRouter-specific fields
             openrouterEnriched: true,
             openrouterProviderName: true,
             openrouterTotalCost: true,
@@ -213,6 +217,312 @@ export function createAdminApp() {
     } catch (error) {
       console.error('Error fetching AI request:', error);
       res.status(500).json({ error: 'Failed to fetch AI request' });
+    }
+  });
+
+  // Search AI requests by prompt content
+  app.get('/api/ai-requests/search/prompt', async (req, res) => {
+    try {
+      const query = req.query.q as string;
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+      const offset = parseInt(req.query.offset as string) || 0;
+      const hasToolCalls = req.query.hasToolCalls as string;
+      const provider = req.query.provider as string;
+      const model = req.query.model as string;
+
+      if (!query || query.trim().length < 2) {
+        res.status(400).json({ error: 'Search query must be at least 2 characters' });
+        return;
+      }
+
+      // Build where clause for filters
+      const whereFilters: any = {};
+      if (hasToolCalls !== undefined) {
+        whereFilters.hasToolCalls = hasToolCalls === 'true';
+      }
+      if (provider) {
+        whereFilters.provider = provider;
+      }
+      if (model) {
+        whereFilters.model = { contains: model };
+      }
+
+      // Use raw SQL for full-text search across prompt fields
+      // SQLite LIKE is case-insensitive by default for ASCII
+      const searchPattern = `%${query}%`;
+
+      const results = await prisma.$queryRaw<Array<{
+        id: string;
+        provider: string;
+        model: string | null;
+        systemPrompt: string | null;
+        userMessages: string | null;
+        assistantResponse: string | null;
+        hasToolCalls: number;
+        toolNames: string | null;
+        promptTokens: number | null;
+        completionTokens: number | null;
+        totalTokens: number | null;
+        totalCostMicros: number | null;
+        createdAt: string;
+      }>>`
+        SELECT
+          id, provider, model, systemPrompt, userMessages, assistantResponse,
+          hasToolCalls, toolNames, promptTokens, completionTokens, totalTokens,
+          totalCostMicros, createdAt
+        FROM AiRequest
+        WHERE (
+          systemPrompt LIKE ${searchPattern}
+          OR userMessages LIKE ${searchPattern}
+          OR assistantResponse LIKE ${searchPattern}
+          OR messages LIKE ${searchPattern}
+        )
+        ${hasToolCalls !== undefined ? (hasToolCalls === 'true' ?
+          (prisma.$queryRaw`AND hasToolCalls = 1` as any) :
+          (prisma.$queryRaw`AND hasToolCalls = 0` as any)) : ''}
+        ORDER BY createdAt DESC
+        LIMIT ${limit}
+        OFFSET ${offset}
+      `;
+
+      // Get total count
+      const countResult = await prisma.$queryRaw<Array<{ count: number }>>`
+        SELECT COUNT(*) as count
+        FROM AiRequest
+        WHERE (
+          systemPrompt LIKE ${searchPattern}
+          OR userMessages LIKE ${searchPattern}
+          OR assistantResponse LIKE ${searchPattern}
+          OR messages LIKE ${searchPattern}
+        )
+      `;
+
+      res.json({
+        results: results.map(r => ({
+          ...r,
+          hasToolCalls: Boolean(r.hasToolCalls),
+        })),
+        total: Number(countResult[0]?.count ?? 0),
+        limit,
+        offset,
+        query,
+      });
+    } catch (error) {
+      console.error('Error searching AI requests:', error);
+      res.status(500).json({ error: 'Failed to search AI requests' });
+    }
+  });
+
+  // Replay an AI request with modifications
+  app.post('/api/ai-requests/:id/replay', async (req, res) => {
+    try {
+      const originalRequest = await prisma.aiRequest.findUnique({
+        where: { id: req.params.id },
+        include: { requestLog: true },
+      });
+
+      if (!originalRequest) {
+        res.status(404).json({ error: 'AI request not found' });
+        return;
+      }
+
+      if (!originalRequest.requestLog) {
+        res.status(400).json({ error: 'Original request log not found' });
+        return;
+      }
+
+      // Get modifications from request body
+      const {
+        model,
+        temperature,
+        maxTokens,
+        systemPrompt,
+        messages,
+      } = req.body;
+
+      // Parse original request
+      let requestBody: any = {};
+      try {
+        requestBody = JSON.parse(originalRequest.fullRequest || '{}');
+      } catch {
+        res.status(400).json({ error: 'Could not parse original request' });
+        return;
+      }
+
+      // Apply modifications
+      if (model !== undefined) requestBody.model = model;
+      if (temperature !== undefined) requestBody.temperature = temperature;
+      if (maxTokens !== undefined) {
+        requestBody.max_tokens = maxTokens;
+        requestBody.max_completion_tokens = maxTokens;
+      }
+      if (systemPrompt !== undefined) {
+        // Update system prompt in messages array
+        if (Array.isArray(requestBody.messages)) {
+          const systemIndex = requestBody.messages.findIndex((m: any) => m.role === 'system');
+          if (systemIndex >= 0) {
+            requestBody.messages[systemIndex].content = systemPrompt;
+          } else {
+            requestBody.messages.unshift({ role: 'system', content: systemPrompt });
+          }
+        }
+        // Also for Anthropic format
+        if (requestBody.system !== undefined) {
+          requestBody.system = systemPrompt;
+        }
+      }
+      if (messages !== undefined) {
+        requestBody.messages = messages;
+      }
+
+      // Disable streaming for replay to simplify response handling
+      requestBody.stream = false;
+
+      // Get original headers
+      let originalHeaders: Record<string, string> = {};
+      try {
+        originalHeaders = JSON.parse(originalRequest.requestLog.headers || '{}');
+      } catch {
+        // Use empty headers
+      }
+
+      // Build the replay URL using the proxy
+      const targetUrl = originalRequest.requestLog.targetUrl;
+      const path = originalRequest.requestLog.path;
+
+      // Return the modified request data for the frontend to execute
+      // (We don't proxy directly from admin to avoid auth issues)
+      res.json({
+        replayData: {
+          targetUrl,
+          path,
+          fullUrl: `${targetUrl}${path}`,
+          method: originalRequest.requestLog.method,
+          headers: {
+            'Content-Type': 'application/json',
+            // Preserve auth header if present (frontend should handle this)
+            ...(originalHeaders.authorization ? { Authorization: originalHeaders.authorization } : {}),
+          },
+          body: requestBody,
+        },
+        original: {
+          id: originalRequest.id,
+          model: originalRequest.model,
+          provider: originalRequest.provider,
+        },
+        modifications: {
+          model: model !== undefined ? model : undefined,
+          temperature: temperature !== undefined ? temperature : undefined,
+          maxTokens: maxTokens !== undefined ? maxTokens : undefined,
+          systemPrompt: systemPrompt !== undefined ? '[modified]' : undefined,
+          messages: messages !== undefined ? '[modified]' : undefined,
+        },
+      });
+    } catch (error) {
+      console.error('Error preparing replay:', error);
+      res.status(500).json({ error: 'Failed to prepare replay' });
+    }
+  });
+
+  // Get prompt templates (recurring system prompts)
+  app.get('/api/ai-requests/templates', async (_req, res) => {
+    try {
+      // Group requests by system prompt to find templates
+      // We use a simple hash approach - in a real app you might want to use
+      // more sophisticated similarity matching
+      const templates = await prisma.$queryRaw<Array<{
+        systemPromptHash: string;
+        systemPromptPreview: string;
+        count: number;
+        avgCost: number;
+        avgTokens: number;
+        models: string;
+        providers: string;
+        firstSeen: string;
+        lastSeen: string;
+      }>>`
+        SELECT
+          substr(systemPrompt, 1, 100) as systemPromptPreview,
+          COUNT(*) as count,
+          AVG(totalCostMicros) as avgCost,
+          AVG(totalTokens) as avgTokens,
+          GROUP_CONCAT(DISTINCT model) as models,
+          GROUP_CONCAT(DISTINCT provider) as providers,
+          MIN(createdAt) as firstSeen,
+          MAX(createdAt) as lastSeen
+        FROM AiRequest
+        WHERE systemPrompt IS NOT NULL AND systemPrompt != ''
+        GROUP BY substr(systemPrompt, 1, 200)
+        HAVING count > 1
+        ORDER BY count DESC
+        LIMIT 50
+      `;
+
+      res.json({
+        templates: templates.map((t) => ({
+          preview: t.systemPromptPreview + (t.systemPromptPreview.length >= 100 ? '...' : ''),
+          count: Number(t.count),
+          avgCostMicros: Math.round(Number(t.avgCost || 0)),
+          avgTokens: Math.round(Number(t.avgTokens || 0)),
+          models: t.models ? t.models.split(',') : [],
+          providers: t.providers ? t.providers.split(',') : [],
+          firstSeen: t.firstSeen,
+          lastSeen: t.lastSeen,
+        })),
+      });
+    } catch (error) {
+      console.error('Error fetching templates:', error);
+      res.status(500).json({ error: 'Failed to fetch templates' });
+    }
+  });
+
+  // Find similar requests (same system prompt)
+  app.get('/api/ai-requests/:id/similar', async (req, res) => {
+    try {
+      const originalRequest = await prisma.aiRequest.findUnique({
+        where: { id: req.params.id },
+        select: { systemPrompt: true },
+      });
+
+      if (!originalRequest || !originalRequest.systemPrompt) {
+        res.json({ similar: [], count: 0 });
+        return;
+      }
+
+      // Find requests with the same system prompt (first 200 chars)
+      const systemPromptPrefix = originalRequest.systemPrompt.substring(0, 200);
+
+      const similar = await prisma.aiRequest.findMany({
+        where: {
+          id: { not: req.params.id },
+          systemPrompt: { startsWith: systemPromptPrefix },
+        },
+        select: {
+          id: true,
+          model: true,
+          provider: true,
+          totalTokens: true,
+          totalCostMicros: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      });
+
+      const total = await prisma.aiRequest.count({
+        where: {
+          id: { not: req.params.id },
+          systemPrompt: { startsWith: systemPromptPrefix },
+        },
+      });
+
+      res.json({
+        similar,
+        count: total,
+      });
+    } catch (error) {
+      console.error('Error fetching similar requests:', error);
+      res.status(500).json({ error: 'Failed to fetch similar requests' });
     }
   });
 
