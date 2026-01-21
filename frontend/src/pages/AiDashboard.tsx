@@ -43,6 +43,7 @@ interface Stats {
 
 interface AiRequest {
   id: string;
+  requestLogId: string;
   provider: string;
   endpoint: string;
   model: string | null;
@@ -394,7 +395,7 @@ function AiDashboard() {
                 aiRequests.map((req) => (
                   <tr
                     key={req.id}
-                    onClick={() => navigate(`/request/${req.id}`)}
+                    onClick={() => navigate(`/request/${req.requestLogId}`)}
                     className="hover:bg-gray-50 cursor-pointer"
                   >
                     <td className="px-4 py-3 whitespace-nowrap">

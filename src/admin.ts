@@ -169,6 +169,7 @@ export function createAdminApp() {
           skip: offset,
           select: {
             id: true,
+            requestLogId: true,
             provider: true,
             endpoint: true,
             model: true,

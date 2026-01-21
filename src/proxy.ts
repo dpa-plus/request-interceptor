@@ -326,69 +326,96 @@ async function handleStreamingResponse(
 
   // Update log with response data
   if (logId && logEnabled) {
-    // Extract OpenRouter generation ID if applicable
-    const openrouterGenerationId = isOpenRouter(parsedAiReq.provider)
-      ? extractOpenRouterGenerationIdFromChunks(parsedResponse.fullResponse)
-      : null;
+    try {
+      // Extract OpenRouter generation ID if applicable
+      const openrouterGenerationId = isOpenRouter(parsedAiReq.provider)
+        ? extractOpenRouterGenerationIdFromChunks(parsedResponse.fullResponse)
+        : null;
 
-    // Create AI request record
-    const aiRequest = await prisma.aiRequest.create({
-      data: {
-        provider: parsedAiReq.provider,
-        endpoint: parsedAiReq.endpoint,
-        model: parsedResponse.model || parsedAiReq.model,
-        isStreaming: true,
-        systemPrompt: parsedAiReq.systemPrompt,
-        userMessages: safeJsonStringify(parsedAiReq.userMessages),
-        assistantResponse: parsedResponse.assistantResponse,
-        fullRequest: safeJsonStringify(parsedAiReq.fullRequest),
-        fullResponse: safeJsonStringify(parsedResponse.fullResponse),
-        // Full conversation with all message types
-        messages: safeJsonStringify(parsedAiReq.messages),
-        hasToolCalls: parsedAiReq.hasToolCalls,
-        toolCallCount: parsedAiReq.toolCallCount > 0 ? parsedAiReq.toolCallCount : null,
-        toolNames: parsedAiReq.toolNames.length > 0 ? safeJsonStringify(parsedAiReq.toolNames) : null,
-        promptTokens: parsedResponse.promptTokens,
-        completionTokens: parsedResponse.completionTokens,
-        totalTokens: parsedResponse.totalTokens,
-        inputCostMicros: cost.inputCostMicros,
-        outputCostMicros: cost.outputCostMicros,
-        totalCostMicros: cost.totalCostMicros,
-        timeToFirstToken,
-        totalDuration: responseTime,
-        // OpenRouter-specific (field added in migration)
-        ...(openrouterGenerationId && { openrouterGenerationId }),
-      } as any,
-    });
+      // Create AI request record
+      const aiRequest = await prisma.aiRequest.create({
+        data: {
+          provider: parsedAiReq.provider,
+          endpoint: parsedAiReq.endpoint,
+          model: parsedResponse.model || parsedAiReq.model,
+          isStreaming: true,
+          systemPrompt: parsedAiReq.systemPrompt,
+          userMessages: safeJsonStringify(parsedAiReq.userMessages),
+          assistantResponse: parsedResponse.assistantResponse,
+          fullRequest: safeJsonStringify(parsedAiReq.fullRequest),
+          fullResponse: safeJsonStringify(parsedResponse.fullResponse),
+          // Full conversation with all message types
+          messages: safeJsonStringify(parsedAiReq.messages),
+          hasToolCalls: parsedAiReq.hasToolCalls,
+          toolCallCount: parsedAiReq.toolCallCount > 0 ? parsedAiReq.toolCallCount : null,
+          toolNames: parsedAiReq.toolNames.length > 0 ? safeJsonStringify(parsedAiReq.toolNames) : null,
+          promptTokens: parsedResponse.promptTokens,
+          completionTokens: parsedResponse.completionTokens,
+          totalTokens: parsedResponse.totalTokens,
+          inputCostMicros: cost.inputCostMicros,
+          outputCostMicros: cost.outputCostMicros,
+          totalCostMicros: cost.totalCostMicros,
+          timeToFirstToken,
+          totalDuration: responseTime,
+          // OpenRouter-specific (field added in migration)
+          ...(openrouterGenerationId && { openrouterGenerationId }),
+        } as any,
+      });
 
-    await prisma.requestLog.update({
-      where: { id: logId },
-      data: {
-        statusCode: proxyRes.statusCode,
-        responseHeaders: safeJsonStringify(proxyRes.headers),
-        responseBody: '[Streaming response - see AI request details]',
-        responseSize: chunks.join('').length,
+      await prisma.requestLog.update({
+        where: { id: logId },
+        data: {
+          statusCode: proxyRes.statusCode,
+          responseHeaders: safeJsonStringify(proxyRes.headers),
+          responseBody: '[Streaming response - see AI request details]',
+          responseSize: chunks.join('').length,
+          responseTime,
+          aiRequestId: aiRequest.id,
+        },
+      });
+
+      // Emit socket event for request completion
+      emitRequestComplete({
+        id: logId,
+        statusCode: proxyRes.statusCode ?? null,
         responseTime,
+        responseSize: chunks.join('').length,
+        error: null,
         aiRequestId: aiRequest.id,
-      },
-    });
+        model: parsedResponse.model || parsedAiReq.model,
+        totalTokens: parsedResponse.totalTokens,
+        totalCostMicros: cost.totalCostMicros,
+      });
 
-    // Emit socket event for request completion
-    emitRequestComplete({
-      id: logId,
-      statusCode: proxyRes.statusCode ?? null,
-      responseTime,
-      responseSize: chunks.join('').length,
-      error: null,
-      aiRequestId: aiRequest.id,
-      model: parsedResponse.model || parsedAiReq.model,
-      totalTokens: parsedResponse.totalTokens,
-      totalCostMicros: cost.totalCostMicros,
-    });
-
-    // Schedule OpenRouter enrichment in background (non-blocking)
-    if (openrouterGenerationId && authHeader) {
-      scheduleOpenRouterEnrichment(aiRequest.id, openrouterGenerationId, authHeader);
+      // Schedule OpenRouter enrichment in background (non-blocking)
+      if (openrouterGenerationId && authHeader) {
+        scheduleOpenRouterEnrichment(aiRequest.id, openrouterGenerationId, authHeader);
+      }
+    } catch (err) {
+      console.error('Error logging streaming AI request:', err);
+      // Still update the request log without AI request link
+      try {
+        await prisma.requestLog.update({
+          where: { id: logId },
+          data: {
+            statusCode: proxyRes.statusCode,
+            responseHeaders: safeJsonStringify(proxyRes.headers),
+            responseBody: '[Streaming response - logging failed]',
+            responseSize: chunks.join('').length,
+            responseTime,
+            error: `AI logging failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+          },
+        });
+        emitRequestComplete({
+          id: logId,
+          statusCode: proxyRes.statusCode ?? null,
+          responseTime,
+          responseSize: chunks.join('').length,
+          error: `AI logging failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        });
+      } catch (updateErr) {
+        console.error('Error updating request log after AI logging failure:', updateErr);
+      }
     }
   }
 }
@@ -451,52 +478,57 @@ async function handleRegularResponse(
     }
 
     if (parsedBody) {
-      const parsedResponse = parseAiResponse(parsedBody, false);
-      const cost = await calculateCost(
-        parsedResponse.model || parsedAiReq.model,
-        parsedResponse.promptTokens,
-        parsedResponse.completionTokens,
-        parsedAiReq.provider
-      );
+      try {
+        const parsedResponse = parseAiResponse(parsedBody, false);
+        const cost = await calculateCost(
+          parsedResponse.model || parsedAiReq.model,
+          parsedResponse.promptTokens,
+          parsedResponse.completionTokens,
+          parsedAiReq.provider
+        );
 
-      // Extract OpenRouter generation ID if applicable
-      const openrouterGenerationId = isOpenRouter(parsedAiReq.provider)
-        ? extractOpenRouterGenerationId(parsedBody)
-        : null;
+        // Extract OpenRouter generation ID if applicable
+        const openrouterGenerationId = isOpenRouter(parsedAiReq.provider)
+          ? extractOpenRouterGenerationId(parsedBody)
+          : null;
 
-      const aiRequest = await prisma.aiRequest.create({
-        data: {
-          provider: parsedAiReq.provider,
-          endpoint: parsedAiReq.endpoint,
-          model: parsedResponse.model || parsedAiReq.model,
-          isStreaming: false,
-          systemPrompt: parsedAiReq.systemPrompt,
-          userMessages: safeJsonStringify(parsedAiReq.userMessages),
-          assistantResponse: parsedResponse.assistantResponse,
-          fullRequest: safeJsonStringify(parsedAiReq.fullRequest),
-          fullResponse: safeJsonStringify(parsedResponse.fullResponse),
-          // Full conversation with all message types
-          messages: safeJsonStringify(parsedAiReq.messages),
-          hasToolCalls: parsedAiReq.hasToolCalls,
-          toolCallCount: parsedAiReq.toolCallCount > 0 ? parsedAiReq.toolCallCount : null,
-          toolNames: parsedAiReq.toolNames.length > 0 ? safeJsonStringify(parsedAiReq.toolNames) : null,
-          promptTokens: parsedResponse.promptTokens,
-          completionTokens: parsedResponse.completionTokens,
-          totalTokens: parsedResponse.totalTokens,
-          inputCostMicros: cost.inputCostMicros,
-          outputCostMicros: cost.outputCostMicros,
-          totalCostMicros: cost.totalCostMicros,
-          totalDuration: responseTime,
-          // OpenRouter-specific (field added in migration)
-          ...(openrouterGenerationId && { openrouterGenerationId }),
-        } as any,
-      });
+        const aiRequest = await prisma.aiRequest.create({
+          data: {
+            provider: parsedAiReq.provider,
+            endpoint: parsedAiReq.endpoint,
+            model: parsedResponse.model || parsedAiReq.model,
+            isStreaming: false,
+            systemPrompt: parsedAiReq.systemPrompt,
+            userMessages: safeJsonStringify(parsedAiReq.userMessages),
+            assistantResponse: parsedResponse.assistantResponse,
+            fullRequest: safeJsonStringify(parsedAiReq.fullRequest),
+            fullResponse: safeJsonStringify(parsedResponse.fullResponse),
+            // Full conversation with all message types
+            messages: safeJsonStringify(parsedAiReq.messages),
+            hasToolCalls: parsedAiReq.hasToolCalls,
+            toolCallCount: parsedAiReq.toolCallCount > 0 ? parsedAiReq.toolCallCount : null,
+            toolNames: parsedAiReq.toolNames.length > 0 ? safeJsonStringify(parsedAiReq.toolNames) : null,
+            promptTokens: parsedResponse.promptTokens,
+            completionTokens: parsedResponse.completionTokens,
+            totalTokens: parsedResponse.totalTokens,
+            inputCostMicros: cost.inputCostMicros,
+            outputCostMicros: cost.outputCostMicros,
+            totalCostMicros: cost.totalCostMicros,
+            totalDuration: responseTime,
+            // OpenRouter-specific (field added in migration)
+            ...(openrouterGenerationId && { openrouterGenerationId }),
+          } as any,
+        });
 
-      aiRequestId = aiRequest.id;
+        aiRequestId = aiRequest.id;
 
-      // Schedule OpenRouter enrichment in background (non-blocking)
-      if (openrouterGenerationId && authHeader) {
-        scheduleOpenRouterEnrichment(aiRequest.id, openrouterGenerationId, authHeader);
+        // Schedule OpenRouter enrichment in background (non-blocking)
+        if (openrouterGenerationId && authHeader) {
+          scheduleOpenRouterEnrichment(aiRequest.id, openrouterGenerationId, authHeader);
+        }
+      } catch (err) {
+        console.error('Error logging non-streaming AI request:', err);
+        // Continue without AI request - the base request log will still be saved
       }
     }
   }
