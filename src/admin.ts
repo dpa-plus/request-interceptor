@@ -11,7 +11,8 @@ export function createAdminApp() {
   const app = express();
 
   // Trust proxy for proper client IP detection behind reverse proxies (Traefik, etc.)
-  app.set('trust proxy', true);
+  // Use 1 to trust the first proxy (Traefik). Using 'true' causes express-rate-limit validation errors.
+  app.set('trust proxy', 1);
 
   app.use(cors());
   app.use(express.json());
@@ -161,7 +162,7 @@ export function createAdminApp() {
         if (to) where.createdAt.lte = new Date(to);
       }
 
-      const [aiRequests, total] = await Promise.all([
+      const [aiRequestsRaw, total] = await Promise.all([
         prisma.aiRequest.findMany({
           where,
           orderBy: { createdAt: 'desc' },
@@ -169,7 +170,6 @@ export function createAdminApp() {
           skip: offset,
           select: {
             id: true,
-            requestLogId: true,
             provider: true,
             endpoint: true,
             model: true,
@@ -192,10 +192,21 @@ export function createAdminApp() {
             openrouterCacheDiscount: true,
             openrouterNativeTokensReasoning: true,
             openrouterNativeTokensCached: true,
+            // Include requestLog relation to get its ID
+            requestLog: {
+              select: { id: true },
+            },
           } as any,
         }),
         prisma.aiRequest.count({ where }),
       ]);
+
+      // Transform to include requestLogId at top level
+      const aiRequests = aiRequestsRaw.map((req: any) => ({
+        ...req,
+        requestLogId: req.requestLog?.id || null,
+        requestLog: undefined, // Remove nested object
+      }));
 
       res.json({ aiRequests, total, limit, offset });
     } catch (error) {
