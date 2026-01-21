@@ -35,6 +35,10 @@ CREATE TABLE "AiRequest" (
     "systemPrompt" TEXT,
     "userMessages" TEXT,
     "assistantResponse" TEXT,
+    "messages" TEXT,
+    "hasToolCalls" BOOLEAN NOT NULL DEFAULT false,
+    "toolCallCount" INTEGER,
+    "toolNames" TEXT,
     "fullRequest" TEXT,
     "fullResponse" TEXT,
     "promptTokens" INTEGER,
@@ -45,6 +49,23 @@ CREATE TABLE "AiRequest" (
     "totalCostMicros" INTEGER,
     "timeToFirstToken" INTEGER,
     "totalDuration" INTEGER,
+    "openrouterGenerationId" TEXT,
+    "openrouterEnriched" BOOLEAN NOT NULL DEFAULT false,
+    "openrouterEnrichedAt" DATETIME,
+    "openrouterProviderName" TEXT,
+    "openrouterUpstreamId" TEXT,
+    "openrouterTotalCost" REAL,
+    "openrouterCacheDiscount" REAL,
+    "openrouterLatency" INTEGER,
+    "openrouterGenerationTime" INTEGER,
+    "openrouterModerationLatency" INTEGER,
+    "openrouterNativeTokensPrompt" INTEGER,
+    "openrouterNativeTokensCompletion" INTEGER,
+    "openrouterNativeTokensReasoning" INTEGER,
+    "openrouterNativeTokensCached" INTEGER,
+    "openrouterFinishReason" TEXT,
+    "openrouterIsByok" BOOLEAN,
+    "openrouterRawResponse" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -106,6 +127,9 @@ CREATE INDEX "AiRequest_model_idx" ON "AiRequest"("model");
 
 -- CreateIndex
 CREATE INDEX "AiRequest_createdAt_idx" ON "AiRequest"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "AiRequest_openrouterGenerationId_idx" ON "AiRequest"("openrouterGenerationId");
 
 -- CreateIndex
 CREATE INDEX "RoutingRule_enabled_priority_idx" ON "RoutingRule"("enabled", "priority");
