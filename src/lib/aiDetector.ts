@@ -11,9 +11,11 @@ const AI_ENDPOINTS = [
   '/v1/moderations',
   // Anthropic
   '/v1/messages',
-  // Generic patterns
+  // Generic patterns (without /v1 prefix)
   '/chat/completions',
   '/completions',
+  '/embeddings',
+  '/messages',
 ];
 
 const AI_ENDPOINT_PATTERNS = AI_ENDPOINTS.map(ep => new RegExp(`${ep.replace('/', '\\/')}$`));

@@ -2,6 +2,48 @@ import express, { Request, Response, NextFunction } from 'express';
 import http from 'http';
 import https from 'https';
 import { URL } from 'url';
+import zlib from 'zlib';
+
+const gunzipAsync = zlib.gunzip.__promisify__ ? zlib.gunzip.__promisify__ :
+  (buf: Buffer) => new Promise<Buffer>((resolve, reject) => {
+    zlib.gunzip(buf, (err, result) => err ? reject(err) : resolve(result));
+  });
+
+const brotliDecompressAsync = zlib.brotliDecompress.__promisify__ ? zlib.brotliDecompress.__promisify__ :
+  (buf: Buffer) => new Promise<Buffer>((resolve, reject) => {
+    zlib.brotliDecompress(buf, (err, result) => err ? reject(err) : resolve(result));
+  });
+
+const inflateAsync = zlib.inflate.__promisify__ ? zlib.inflate.__promisify__ :
+  (buf: Buffer) => new Promise<Buffer>((resolve, reject) => {
+    zlib.inflate(buf, (err, result) => err ? reject(err) : resolve(result));
+  });
+
+/**
+ * Decompress response buffer based on Content-Encoding header.
+ * Returns the original buffer if not compressed or decompression fails.
+ */
+async function decompressBuffer(buffer: Buffer, contentEncoding: string | undefined): Promise<Buffer> {
+  if (!contentEncoding || contentEncoding === 'identity') {
+    return buffer;
+  }
+
+  try {
+    const encoding = contentEncoding.toLowerCase();
+    if (encoding === 'gzip' || encoding === 'x-gzip') {
+      return await gunzipAsync(buffer);
+    } else if (encoding === 'br') {
+      return await brotliDecompressAsync(buffer);
+    } else if (encoding === 'deflate') {
+      return await inflateAsync(buffer);
+    }
+  } catch (err) {
+    // Decompression failed, return original buffer
+    console.error('Decompression failed:', err);
+  }
+
+  return buffer;
+}
 import { prisma } from './lib/prisma.js';
 import { resolveTarget, extractTargetFromQuery, buildTargetUrl } from './lib/routing.js';
 import { processBody, safeJsonStringify, safeJsonParse } from './lib/bodyHandler.js';
@@ -387,9 +429,13 @@ async function handleRegularResponse(
   res.status(proxyRes.statusCode || 200);
   res.send(responseBuffer);
 
+  // Decompress for logging/parsing (original buffer already sent to client)
+  const contentEncoding = proxyRes.headers['content-encoding'] as string | undefined;
+  const decompressedBuffer = await decompressBuffer(responseBuffer, contentEncoding);
+
   // Process response for logging
   const { body: responseBody, truncated: responseTruncated, size: responseSize } = processBody(
-    responseBuffer,
+    decompressedBuffer,
     maxBodySize
   );
 
@@ -399,7 +445,7 @@ async function handleRegularResponse(
   if (isAi && parsedAiReq && logEnabled) {
     let parsedBody: any = null;
     try {
-      parsedBody = JSON.parse(responseBuffer.toString());
+      parsedBody = JSON.parse(decompressedBuffer.toString());
     } catch {
       // Not valid JSON
     }

@@ -10,6 +10,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export function createAdminApp() {
   const app = express();
 
+  // Trust proxy for proper client IP detection behind reverse proxies (Traefik, etc.)
+  app.set('trust proxy', true);
+
   app.use(cors());
   app.use(express.json());
   app.use(rateLimiter);
