@@ -105,6 +105,18 @@ function App() {
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>
+
+      <footer className="fixed bottom-2 right-3">
+        <a
+          href="https://dpa.plus"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs opacity-50 hover:opacity-100 transition-opacity"
+          style={{ color: '#FF6100' }}
+        >
+          DPA+
+        </a>
+      </footer>
     </div>
   );
 }
