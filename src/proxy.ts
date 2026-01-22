@@ -56,16 +56,126 @@ import {
   isOpenRouter,
   extractOpenRouterGenerationId,
   extractOpenRouterGenerationIdFromChunks,
+  ConversationMessage,
+  ParsedAiResponse,
 } from './lib/aiDetector.js';
+
+/**
+ * Add the assistant response (including tool calls) to the messages array.
+ * This creates a complete conversation including the AI's response.
+ */
+function buildMessagesWithResponse(
+  requestMessages: ConversationMessage[],
+  parsedResponse: ParsedAiResponse
+): ConversationMessage[] {
+  const messages = [...requestMessages];
+
+  // Only add response if there's content or tool calls
+  if (parsedResponse.assistantResponse || (parsedResponse.toolCalls && parsedResponse.toolCalls.length > 0)) {
+    messages.push({
+      role: 'assistant',
+      content: parsedResponse.assistantResponse,
+      toolCalls: parsedResponse.toolCalls,
+    });
+  }
+
+  return messages;
+}
+
+/**
+ * Combine tool names from request and response into a single JSON string.
+ */
+function combineToolNames(
+  requestToolNames: string[],
+  responseToolCalls?: { function: { name: string } }[]
+): string | null {
+  const allNames = new Set(requestToolNames);
+  if (responseToolCalls) {
+    for (const tc of responseToolCalls) {
+      if (tc.function?.name) {
+        allNames.add(tc.function.name);
+      }
+    }
+  }
+  return allNames.size > 0 ? safeJsonStringify(Array.from(allNames)) : null;
+}
 import { SSECollector, isStreamingResponse } from './lib/streamHandler.js';
 import { scheduleOpenRouterEnrichment } from './lib/openRouterEnricher.js';
 import { emitRequestStart, emitRequestComplete } from './lib/socketServer.js';
+
+// Known bot/crawler User-Agent patterns to block
+const BLOCKED_BOT_PATTERNS: RegExp[] = [
+  // AI crawlers
+  /gptbot/i,
+  /chatgpt-user/i,
+  /claudebot/i,
+  /anthropic-ai/i,
+  /claude-web/i,
+  /cohere-ai/i,
+  /perplexitybot/i,
+  /youbot/i,
+  /google-extended/i,
+  /ccbot/i,
+  /meta-externalagent/i,
+  /facebookbot/i,
+  /omgili/i,
+  /diffbot/i,
+  /bytespider/i,
+  /imagesiftbot/i,
+  /friendlycrawler/i,
+  // Search engine crawlers (optional - comment out if you want them)
+  /googlebot/i,
+  /bingbot/i,
+  /yandexbot/i,
+  /baiduspider/i,
+  /duckduckbot/i,
+  /scrapy/i,
+];
+
+/**
+ * Check if the User-Agent matches any blocked bot pattern
+ */
+function isBlockedBot(userAgent: string | undefined): boolean {
+  if (!userAgent) return false;
+  return BLOCKED_BOT_PATTERNS.some(pattern => pattern.test(userAgent));
+}
+
+// Content types to skip logging for (static assets, scripts, etc.)
+const SKIP_LOGGING_EXTENSIONS = [
+  '.js', '.mjs', '.cjs',  // JavaScript
+  '.css',                  // Stylesheets
+  '.map',                  // Source maps
+  '.woff', '.woff2', '.ttf', '.eot', '.otf',  // Fonts
+  '.ico', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp',  // Images
+];
+
+/**
+ * Check if the request path should skip logging (static assets)
+ */
+function shouldSkipLogging(path: string): boolean {
+  const lowerPath = path.toLowerCase();
+  return SKIP_LOGGING_EXTENSIONS.some(ext => lowerPath.endsWith(ext));
+}
 
 export function createProxyApp() {
   const app = express();
 
   // Collect raw body
   app.use(express.raw({ type: '*/*', limit: '50mb' }));
+
+  // Bot/Crawler blocking middleware
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const userAgent = req.headers['user-agent'];
+    if (isBlockedBot(userAgent)) {
+      console.log(`[Bot blocked] User-Agent: ${userAgent}, Path: ${req.path}`);
+      res.status(403).json({
+        error: 'Forbidden',
+        message: 'Bot/Crawler access is not allowed',
+      });
+      return;
+    }
+    next();
+  });
 
   app.use(async (req: Request, res: Response, next: NextFunction) => {
     const startTime = Date.now();
@@ -134,9 +244,10 @@ export function createProxyApp() {
       // Prepare request body info for logging
       const { body: logBody, truncated: bodyTruncated, size: bodySize } = processBody(req.body, maxBodySize);
 
-      // Create initial log entry
+      // Create initial log entry (skip static assets like .js, .css, images, etc.)
       let logId: string | null = null;
-      if (logEnabled) {
+      const skipLogging = shouldSkipLogging(req.path);
+      if (logEnabled && !skipLogging) {
         const log = await prisma.requestLog.create({
           data: {
             method: req.method,
@@ -344,11 +455,13 @@ async function handleStreamingResponse(
           assistantResponse: parsedResponse.assistantResponse,
           fullRequest: safeJsonStringify(parsedAiReq.fullRequest),
           fullResponse: safeJsonStringify(parsedResponse.fullResponse),
-          // Full conversation with all message types
-          messages: safeJsonStringify(parsedAiReq.messages),
-          hasToolCalls: parsedAiReq.hasToolCalls,
-          toolCallCount: parsedAiReq.toolCallCount > 0 ? parsedAiReq.toolCallCount : null,
-          toolNames: parsedAiReq.toolNames.length > 0 ? safeJsonStringify(parsedAiReq.toolNames) : null,
+          // Full conversation with all message types (including AI response)
+          messages: safeJsonStringify(buildMessagesWithResponse(parsedAiReq.messages, parsedResponse)),
+          hasToolCalls: parsedAiReq.hasToolCalls || (parsedResponse.toolCalls && parsedResponse.toolCalls.length > 0),
+          toolCallCount: (parsedAiReq.toolCallCount || 0) + (parsedResponse.toolCalls?.length || 0) > 0
+            ? (parsedAiReq.toolCallCount || 0) + (parsedResponse.toolCalls?.length || 0)
+            : null,
+          toolNames: combineToolNames(parsedAiReq.toolNames, parsedResponse.toolCalls),
           promptTokens: parsedResponse.promptTokens,
           completionTokens: parsedResponse.completionTokens,
           totalTokens: parsedResponse.totalTokens,
@@ -503,11 +616,13 @@ async function handleRegularResponse(
             assistantResponse: parsedResponse.assistantResponse,
             fullRequest: safeJsonStringify(parsedAiReq.fullRequest),
             fullResponse: safeJsonStringify(parsedResponse.fullResponse),
-            // Full conversation with all message types
-            messages: safeJsonStringify(parsedAiReq.messages),
-            hasToolCalls: parsedAiReq.hasToolCalls,
-            toolCallCount: parsedAiReq.toolCallCount > 0 ? parsedAiReq.toolCallCount : null,
-            toolNames: parsedAiReq.toolNames.length > 0 ? safeJsonStringify(parsedAiReq.toolNames) : null,
+            // Full conversation with all message types (including AI response)
+            messages: safeJsonStringify(buildMessagesWithResponse(parsedAiReq.messages, parsedResponse)),
+            hasToolCalls: parsedAiReq.hasToolCalls || (parsedResponse.toolCalls && parsedResponse.toolCalls.length > 0),
+            toolCallCount: (parsedAiReq.toolCallCount || 0) + (parsedResponse.toolCalls?.length || 0) > 0
+              ? (parsedAiReq.toolCallCount || 0) + (parsedResponse.toolCalls?.length || 0)
+              : null,
+            toolNames: combineToolNames(parsedAiReq.toolNames, parsedResponse.toolCalls),
             promptTokens: parsedResponse.promptTokens,
             completionTokens: parsedResponse.completionTokens,
             totalTokens: parsedResponse.totalTokens,

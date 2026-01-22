@@ -234,123 +234,78 @@ function RequestDetail() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-white rounded-lg shadow p-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-start gap-4">
+    <div className="space-y-4">
+      {/* Compact Header with inline stats */}
+      <div className="bg-white rounded-lg shadow px-4 py-3">
+        <div className="flex items-center justify-between gap-4">
+          {/* Left: Back + Method + Status + URL */}
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             <button
               onClick={() => navigate(-1)}
-              className="mt-1 p-1 text-gray-400 hover:text-gray-600 rounded hover:bg-gray-100"
+              className="p-1 text-gray-400 hover:text-gray-600 rounded hover:bg-gray-100 flex-shrink-0"
               title="Go back"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
             </button>
-            <div className="flex-1">
-              <div className="flex items-center gap-3 flex-wrap">
-                <span className={`px-3 py-1 text-sm font-bold rounded border ${getMethodColor(log.method)}`}>
-                  {log.method}
-                </span>
-                <span className={`px-3 py-1 text-lg font-bold rounded ${getStatusBg(log.statusCode)} ${getStatusColor(log.statusCode)}`}>
-                  {log.statusCode || 'Pending'}
-                </span>
-                {log.isAiRequest && (
-                  <span className="px-2 py-1 text-xs font-medium rounded bg-purple-100 text-purple-800 border border-purple-200">
-                    AI Request
-                  </span>
-                )}
-                {log.aiRequest?.isStreaming && (
-                  <span className="px-2 py-1 text-xs font-medium rounded bg-blue-100 text-blue-800 border border-blue-200">
-                    Streaming
-                  </span>
-                )}
-              </div>
-              <div className="mt-2 text-sm text-gray-600 font-mono break-all bg-gray-50 rounded px-2 py-1">
-                {log.url}
-              </div>
-              <div className="mt-2 text-xs text-gray-400">
-                {new Date(log.createdAt).toLocaleString()}
-              </div>
+            <span className={`px-2 py-0.5 text-xs font-bold rounded border flex-shrink-0 ${getMethodColor(log.method)}`}>
+              {log.method}
+            </span>
+            <span className={`px-2 py-0.5 text-sm font-bold rounded flex-shrink-0 ${getStatusBg(log.statusCode)} ${getStatusColor(log.statusCode)}`}>
+              {log.statusCode || '...'}
+            </span>
+            {log.isAiRequest && (
+              <span className="px-1.5 py-0.5 text-xs font-medium rounded bg-purple-100 text-purple-800 flex-shrink-0">
+                AI
+              </span>
+            )}
+            {log.aiRequest?.isStreaming && (
+              <span className="px-1.5 py-0.5 text-xs font-medium rounded bg-blue-100 text-blue-800 flex-shrink-0">
+                Stream
+              </span>
+            )}
+            <span className="text-sm text-gray-600 font-mono truncate" title={log.url}>
+              {log.path}
+            </span>
+          </div>
+
+          {/* Right: Stats + Actions */}
+          <div className="flex items-center gap-4 flex-shrink-0">
+            {/* Inline Stats */}
+            <div className="hidden md:flex items-center gap-4 text-xs text-gray-500">
+              <span title={log.targetUrl} className="truncate max-w-[150px]">
+                → {log.targetUrl ? new URL(log.targetUrl).host : '-'}
+              </span>
+              <span className={log.responseTime && log.responseTime > 1000 ? 'text-orange-600' : log.responseTime && log.responseTime > 500 ? 'text-yellow-600' : ''}>
+                {log.responseTime ? `${log.responseTime}ms` : '-'}
+              </span>
+              <span>{log.bodySize > 0 ? `↑${(log.bodySize / 1024).toFixed(1)}KB` : ''}</span>
+              <span>{log.responseSize > 0 ? `↓${(log.responseSize / 1024).toFixed(1)}KB` : ''}</span>
+              <span className="text-gray-400">{new Date(log.createdAt).toLocaleTimeString()}</span>
+            </div>
+            {/* Actions */}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={handleCopyCurl}
+                className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded bg-gray-900 text-white hover:bg-gray-800 transition-colors"
+                title="Copy as cURL command"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                cURL
+              </button>
+              <CopyButton text={log.url} label="URL" size="sm" />
             </div>
           </div>
-
-          {/* Actions Toolbar */}
-          <div className="flex flex-col gap-2">
-            <button
-              onClick={handleCopyCurl}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-gray-900 text-white hover:bg-gray-800 transition-colors"
-              title="Copy as cURL command"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-              Copy as cURL
-            </button>
-            <CopyButton text={log.url} label="Copy URL" size="sm" />
-          </div>
         </div>
-      </div>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-            </svg>
-            Target
-          </div>
-          <div className="text-sm font-medium text-gray-900 truncate" title={log.targetUrl}>
-            {log.targetUrl || '-'}
-          </div>
-          <div className="text-xs text-gray-400 mt-1">
-            via {log.routeSource}
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            Response Time
-          </div>
-          <div className="text-sm font-medium text-gray-900">
-            {log.responseTime ? (
-              <span className={log.responseTime > 1000 ? 'text-orange-600' : log.responseTime > 500 ? 'text-yellow-600' : 'text-green-600'}>
-                {log.responseTime}ms
-              </span>
-            ) : '-'}
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-            </svg>
-            Request Size
-          </div>
-          <div className="text-sm font-medium text-gray-900">
-            {log.bodySize > 0 ? `${(log.bodySize / 1024).toFixed(1)} KB` : '-'}
-          </div>
-          {log.bodyTruncated && (
-            <div className="text-xs text-orange-500 mt-1">Truncated</div>
-          )}
-        </div>
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
-            </svg>
-            Response Size
-          </div>
-          <div className="text-sm font-medium text-gray-900">
-            {log.responseSize > 0 ? `${(log.responseSize / 1024).toFixed(1)} KB` : '-'}
-          </div>
-          {log.responseTruncated && (
-            <div className="text-xs text-orange-500 mt-1">Truncated</div>
-          )}
+        {/* Mobile stats row */}
+        <div className="md:hidden flex items-center gap-3 mt-2 pt-2 border-t border-gray-100 text-xs text-gray-500">
+          <span>→ {log.targetUrl ? new URL(log.targetUrl).host : '-'}</span>
+          <span>{log.responseTime ? `${log.responseTime}ms` : '-'}</span>
+          <span>{log.bodySize > 0 ? `↑${(log.bodySize / 1024).toFixed(1)}KB` : ''}</span>
+          <span>{log.responseSize > 0 ? `↓${(log.responseSize / 1024).toFixed(1)}KB` : ''}</span>
         </div>
       </div>
 
@@ -472,14 +427,14 @@ function RequestDetail() {
         )}
 
         {activeTab === 'ai' && log.aiRequest && (
-          <AiDetailsTab aiRequest={log.aiRequest} formatCost={formatCost} />
+          <AiDetailsTab aiRequest={log.aiRequest} formatCost={formatCost} targetUrl={log.targetUrl} />
         )}
       </div>
     </div>
   );
 }
 
-// OpenRouter Details Panel
+// OpenRouter Details Panel - Compact version
 function OpenRouterPanel({ aiRequest }: { aiRequest: AiRequest }) {
   const hasTimingData = aiRequest.openrouterLatency || aiRequest.openrouterGenerationTime || aiRequest.openrouterModerationLatency;
   const hasTokenData = aiRequest.openrouterNativeTokensPrompt || aiRequest.openrouterNativeTokensCompletion ||
@@ -487,216 +442,129 @@ function OpenRouterPanel({ aiRequest }: { aiRequest: AiRequest }) {
 
   if (!aiRequest.openrouterEnriched) {
     return (
-      <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4 border border-purple-200">
-        <div className="flex items-center gap-2 text-purple-700">
-          <svg className="w-5 h-5 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className="bg-purple-50 rounded-lg px-3 py-2 border border-purple-200">
+        <div className="flex items-center gap-2 text-purple-700 text-sm">
+          <svg className="w-4 h-4 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <span className="font-medium">OpenRouter data pending enrichment...</span>
+          <span>Pending enrichment...</span>
+          {aiRequest.openrouterGenerationId && (
+            <code className="bg-purple-200 px-1 rounded text-xs ml-auto">{aiRequest.openrouterGenerationId.slice(0, 20)}...</code>
+          )}
         </div>
-        {aiRequest.openrouterGenerationId && (
-          <div className="mt-2 text-xs text-purple-600">
-            Generation ID: <code className="bg-purple-200 px-1 rounded">{aiRequest.openrouterGenerationId}</code>
-          </div>
-        )}
       </div>
     );
   }
 
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
-      <div className="px-4 py-3 border-b bg-gradient-to-r from-purple-500 to-purple-600">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium text-white flex items-center gap-2">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            OpenRouter Insights
-          </h3>
+      <div className="p-3 space-y-3">
+        {/* Compact header row with key info */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+          {aiRequest.openrouterFinishReason && (
+            <span className={`px-1.5 py-0.5 rounded font-medium ${
+              aiRequest.openrouterFinishReason === 'stop' ? 'bg-green-100 text-green-700' :
+              aiRequest.openrouterFinishReason === 'length' ? 'bg-yellow-100 text-yellow-700' :
+              'bg-gray-100 text-gray-700'
+            }`}>
+              {aiRequest.openrouterFinishReason}
+            </span>
+          )}
+          {aiRequest.openrouterIsByok && (
+            <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">BYOK</span>
+          )}
+          {aiRequest.openrouterGenerationId && (
+            <span className="text-gray-400 font-mono truncate max-w-[180px]" title={aiRequest.openrouterGenerationId}>
+              {aiRequest.openrouterGenerationId}
+            </span>
+          )}
           {aiRequest.openrouterEnrichedAt && (
-            <span className="text-xs text-purple-200">
-              Enriched {new Date(aiRequest.openrouterEnrichedAt).toLocaleString()}
+            <span className="text-gray-400 ml-auto">
+              {new Date(aiRequest.openrouterEnrichedAt).toLocaleTimeString()}
             </span>
           )}
         </div>
-      </div>
 
-      <div className="p-4 space-y-4">
-        {/* Provider & IDs */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          {aiRequest.openrouterProviderName && (
-            <div>
-              <div className="text-xs text-gray-500">Actual Provider</div>
-              <div className="font-medium text-gray-900">{aiRequest.openrouterProviderName}</div>
+        {/* Compact metrics grid */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          {/* Cost */}
+          {aiRequest.openrouterTotalCost != null && (
+            <div className="bg-purple-50 rounded px-2 py-1.5">
+              <div className="text-[10px] text-purple-600 uppercase">Cost</div>
+              <div className="text-sm font-bold text-purple-900">${aiRequest.openrouterTotalCost.toFixed(6)}</div>
             </div>
           )}
-          {aiRequest.openrouterGenerationId && (
-            <div>
-              <div className="text-xs text-gray-500">Generation ID</div>
-              <div className="font-mono text-xs text-gray-700 truncate" title={aiRequest.openrouterGenerationId}>
-                {aiRequest.openrouterGenerationId}
-              </div>
+          {/* Cache Savings */}
+          {aiRequest.openrouterCacheDiscount != null && aiRequest.openrouterCacheDiscount > 0 && (
+            <div className="bg-green-50 rounded px-2 py-1.5">
+              <div className="text-[10px] text-green-600 uppercase">Saved</div>
+              <div className="text-sm font-bold text-green-900">-${aiRequest.openrouterCacheDiscount.toFixed(6)}</div>
             </div>
           )}
-          {aiRequest.openrouterUpstreamId && (
-            <div>
-              <div className="text-xs text-gray-500">Upstream ID</div>
-              <div className="font-mono text-xs text-gray-700 truncate" title={aiRequest.openrouterUpstreamId}>
-                {aiRequest.openrouterUpstreamId}
-              </div>
+          {/* Latency */}
+          {aiRequest.openrouterLatency && (
+            <div className="bg-gray-50 rounded px-2 py-1.5">
+              <div className="text-[10px] text-gray-500 uppercase">Latency</div>
+              <div className="text-sm font-bold text-gray-900">{aiRequest.openrouterLatency}ms</div>
             </div>
           )}
-          {aiRequest.openrouterFinishReason && (
-            <div>
-              <div className="text-xs text-gray-500">Finish Reason</div>
-              <div className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
-                aiRequest.openrouterFinishReason === 'stop' ? 'bg-green-100 text-green-800' :
-                aiRequest.openrouterFinishReason === 'length' ? 'bg-yellow-100 text-yellow-800' :
-                aiRequest.openrouterFinishReason === 'content_filter' ? 'bg-red-100 text-red-800' :
-                'bg-gray-100 text-gray-800'
-              }`}>
-                {aiRequest.openrouterFinishReason}
-              </div>
-            </div>
-          )}
-          {aiRequest.openrouterIsByok !== null && aiRequest.openrouterIsByok !== undefined && (
-            <div>
-              <div className="text-xs text-gray-500">BYOK</div>
-              <div className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
-                aiRequest.openrouterIsByok ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
-              }`}>
-                {aiRequest.openrouterIsByok ? 'Yes' : 'No'}
-              </div>
+          {/* Generation Time */}
+          {aiRequest.openrouterGenerationTime && (
+            <div className="bg-blue-50 rounded px-2 py-1.5">
+              <div className="text-[10px] text-blue-600 uppercase">Generation</div>
+              <div className="text-sm font-bold text-blue-900">{aiRequest.openrouterGenerationTime}ms</div>
             </div>
           )}
         </div>
 
-        {/* Cost Details */}
-        {(aiRequest.openrouterTotalCost !== null || aiRequest.openrouterCacheDiscount !== null) && (
-          <div className="border-t pt-4">
-            <h4 className="text-xs font-medium text-gray-500 mb-2">Cost Details</h4>
-            <div className="grid grid-cols-2 gap-4">
-              {aiRequest.openrouterTotalCost != null && (
-                <div className="bg-purple-50 rounded-lg p-3">
-                  <div className="text-xs text-purple-600">Actual Cost</div>
-                  <div className="text-lg font-bold text-purple-900">
-                    ${(aiRequest.openrouterTotalCost ?? 0).toFixed(6)}
-                  </div>
-                </div>
-              )}
-              {aiRequest.openrouterCacheDiscount != null && aiRequest.openrouterCacheDiscount > 0 && (
-                <div className="bg-green-50 rounded-lg p-3">
-                  <div className="text-xs text-green-600">Cache Savings</div>
-                  <div className="text-lg font-bold text-green-900">
-                    -${(aiRequest.openrouterCacheDiscount ?? 0).toFixed(6)}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Timing Details */}
-        {hasTimingData && (
-          <div className="border-t pt-4">
-            <h4 className="text-xs font-medium text-gray-500 mb-2">Timing Breakdown</h4>
-            <div className="space-y-2">
-              {aiRequest.openrouterLatency && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Total Latency</span>
-                  <span className="font-medium">{aiRequest.openrouterLatency}ms</span>
-                </div>
-              )}
-              {aiRequest.openrouterGenerationTime && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Generation Time</span>
-                  <span className="font-medium text-blue-600">{aiRequest.openrouterGenerationTime}ms</span>
-                </div>
-              )}
+        {/* Timing Waterfall - Compact */}
+        {hasTimingData && aiRequest.openrouterLatency && aiRequest.openrouterGenerationTime && (
+          <div>
+            <div className="flex rounded-full overflow-hidden h-2 bg-gray-100">
               {aiRequest.openrouterModerationLatency && aiRequest.openrouterModerationLatency > 0 && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Moderation Latency</span>
-                  <span className="font-medium text-orange-600">{aiRequest.openrouterModerationLatency}ms</span>
-                </div>
+                <div
+                  className="bg-orange-400"
+                  style={{ width: `${(aiRequest.openrouterModerationLatency / aiRequest.openrouterLatency) * 100}%` }}
+                  title={`Moderation: ${aiRequest.openrouterModerationLatency}ms`}
+                />
               )}
-              {/* Timing Waterfall */}
-              {aiRequest.openrouterLatency && aiRequest.openrouterGenerationTime && (
-                <div className="mt-2">
-                  <div className="flex rounded-full overflow-hidden h-3 bg-gray-100">
-                    {aiRequest.openrouterModerationLatency && aiRequest.openrouterModerationLatency > 0 && (
-                      <div
-                        className="bg-orange-400"
-                        style={{ width: `${(aiRequest.openrouterModerationLatency / aiRequest.openrouterLatency) * 100}%` }}
-                        title={`Moderation: ${aiRequest.openrouterModerationLatency}ms`}
-                      />
-                    )}
-                    <div
-                      className="bg-blue-500"
-                      style={{ width: `${(aiRequest.openrouterGenerationTime / aiRequest.openrouterLatency) * 100}%` }}
-                      title={`Generation: ${aiRequest.openrouterGenerationTime}ms`}
-                    />
-                    <div className="bg-gray-300 flex-1" title="Network/Other" />
-                  </div>
-                  <div className="flex justify-between mt-1 text-xs text-gray-400">
-                    <span>Moderation</span>
-                    <span>Generation</span>
-                    <span>Network</span>
-                  </div>
-                </div>
-              )}
+              <div
+                className="bg-blue-500"
+                style={{ width: `${(aiRequest.openrouterGenerationTime / aiRequest.openrouterLatency) * 100}%` }}
+                title={`Generation: ${aiRequest.openrouterGenerationTime}ms`}
+              />
+              <div className="bg-gray-300 flex-1" title="Network/Other" />
             </div>
           </div>
         )}
 
-        {/* Token Details */}
+        {/* Native Token Details - Compact inline */}
         {hasTokenData && (
-          <div className="border-t pt-4">
-            <h4 className="text-xs font-medium text-gray-500 mb-2">Native Token Details</h4>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {aiRequest.openrouterNativeTokensPrompt != null && (
-                <div className="bg-blue-50 rounded p-2">
-                  <div className="text-xs text-blue-600">Prompt</div>
-                  <div className="font-bold text-blue-900">
-                    {(aiRequest.openrouterNativeTokensPrompt ?? 0).toLocaleString()}
-                  </div>
-                </div>
-              )}
-              {aiRequest.openrouterNativeTokensCompletion != null && (
-                <div className="bg-green-50 rounded p-2">
-                  <div className="text-xs text-green-600">Completion</div>
-                  <div className="font-bold text-green-900">
-                    {(aiRequest.openrouterNativeTokensCompletion ?? 0).toLocaleString()}
-                  </div>
-                </div>
-              )}
-              {aiRequest.openrouterNativeTokensCached != null && aiRequest.openrouterNativeTokensCached > 0 && (
-                <div className="bg-amber-50 rounded p-2">
-                  <div className="text-xs text-amber-600">Cached</div>
-                  <div className="font-bold text-amber-900">
-                    {(aiRequest.openrouterNativeTokensCached ?? 0).toLocaleString()}
-                  </div>
-                </div>
-              )}
-              {aiRequest.openrouterNativeTokensReasoning != null && aiRequest.openrouterNativeTokensReasoning > 0 && (
-                <div className="bg-purple-50 rounded p-2">
-                  <div className="text-xs text-purple-600">Reasoning</div>
-                  <div className="font-bold text-purple-900">
-                    {(aiRequest.openrouterNativeTokensReasoning ?? 0).toLocaleString()}
-                  </div>
-                </div>
-              )}
-            </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-gray-500">Native:</span>
+            {aiRequest.openrouterNativeTokensPrompt != null && (
+              <span className="text-blue-700">{aiRequest.openrouterNativeTokensPrompt.toLocaleString()}↑</span>
+            )}
+            {aiRequest.openrouterNativeTokensCompletion != null && (
+              <span className="text-green-700">{aiRequest.openrouterNativeTokensCompletion.toLocaleString()}↓</span>
+            )}
+            {aiRequest.openrouterNativeTokensCached != null && aiRequest.openrouterNativeTokensCached > 0 && (
+              <span className="text-amber-700">{aiRequest.openrouterNativeTokensCached.toLocaleString()} cached</span>
+            )}
+            {aiRequest.openrouterNativeTokensReasoning != null && aiRequest.openrouterNativeTokensReasoning > 0 && (
+              <span className="text-purple-700">{aiRequest.openrouterNativeTokensReasoning.toLocaleString()} reasoning</span>
+            )}
           </div>
         )}
 
-        {/* Raw Response (collapsible) */}
+        {/* Raw Response - Compact collapsible */}
         {aiRequest.openrouterRawResponse && (
-          <details className="border-t pt-4">
-            <summary className="cursor-pointer text-xs font-medium text-gray-500 hover:text-gray-700">
-              View Raw OpenRouter Response
+          <details className="border-t pt-2">
+            <summary className="cursor-pointer text-xs text-gray-400 hover:text-gray-600">
+              Raw Response
             </summary>
             <div className="mt-2">
-              <SmartBodyViewer content={aiRequest.openrouterRawResponse} maxHeight="max-h-64" />
+              <SmartBodyViewer content={aiRequest.openrouterRawResponse} maxHeight="max-h-48" />
             </div>
           </details>
         )}
@@ -908,10 +776,17 @@ function ConversationView({ aiRequest }: { aiRequest: AiRequest }) {
 
                 {/* Tool Calls for Assistant messages */}
                 {msg.toolCalls && msg.toolCalls.length > 0 && (
-                  <div className="mt-2 space-y-2">
+                  <div className={msg.content ? 'mt-2 space-y-2' : 'space-y-2'}>
                     {msg.toolCalls.map((tc, tcIndex) => (
                       <ToolCallBlock key={tcIndex} toolCall={tc} />
                     ))}
+                  </div>
+                )}
+
+                {/* Show placeholder when assistant has no content and no tool calls */}
+                {msg.role === 'assistant' && !msg.content && (!msg.toolCalls || msg.toolCalls.length === 0) && (
+                  <div className="text-sm text-gray-400 italic">
+                    (No response content)
                   </div>
                 )}
               </div>
@@ -1142,7 +1017,7 @@ console.log(data);`;
   );
 }
 
-// Enhanced Timing Waterfall Visualization
+// Enhanced Timing Waterfall Visualization - Compact
 function TimingWaterfall({ aiRequest }: { aiRequest: AiRequest }) {
   const totalDuration = aiRequest.totalDuration || 0;
   const ttft = aiRequest.timeToFirstToken || 0;
@@ -1159,26 +1034,22 @@ function TimingWaterfall({ aiRequest }: { aiRequest: AiRequest }) {
   // For non-streaming requests, show simple timing
   if (!aiRequest.isStreaming) {
     return (
-      <div className="bg-white rounded-lg shadow p-4">
-        <h3 className="text-sm font-medium text-gray-900 mb-3 flex items-center gap-2">
-          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          Request Timing
-        </h3>
-        <div className="flex items-center gap-4">
-          <div className="flex-1">
-            <div className="text-xs text-gray-500">Total Duration</div>
-            <div className="text-2xl font-bold text-gray-900">{totalDuration}ms</div>
-          </div>
-          {completionTokens > 0 && (
-            <div>
-              <div className="text-xs text-gray-500">Throughput</div>
-              <div className="text-lg font-medium text-blue-600">
+      <div className="bg-white rounded-lg shadow p-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-medium text-gray-500 flex items-center gap-1">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Request Timing
+          </h3>
+          <div className="flex items-center gap-3 text-sm">
+            <span className="font-bold text-gray-900">{totalDuration}ms</span>
+            {completionTokens > 0 && (
+              <span className="text-blue-600 font-medium">
                 {(completionTokens / (totalDuration / 1000)).toFixed(1)} tok/s
-              </div>
-            </div>
-          )}
+              </span>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -1188,157 +1059,113 @@ function TimingWaterfall({ aiRequest }: { aiRequest: AiRequest }) {
   const ttftPercent = totalDuration > 0 ? (ttft / totalDuration) * 100 : 0;
 
   return (
-    <div className="bg-white rounded-lg shadow p-4">
-      <h3 className="text-sm font-medium text-gray-900 mb-3 flex items-center gap-2">
-        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-        </svg>
-        Streaming Timeline
-      </h3>
-
-      {/* Timing Stats */}
-      <div className="grid grid-cols-3 gap-4 mb-4">
-        <div className="bg-purple-50 rounded-lg p-3">
-          <div className="text-xs text-purple-600">Time to First Token</div>
-          <div className="text-xl font-bold text-purple-900">{ttft}ms</div>
-        </div>
-        <div className="bg-blue-50 rounded-lg p-3">
-          <div className="text-xs text-blue-600">Total Duration</div>
-          <div className="text-xl font-bold text-blue-900">{totalDuration}ms</div>
-        </div>
-        <div className="bg-green-50 rounded-lg p-3">
-          <div className="text-xs text-green-600">Throughput</div>
-          <div className="text-xl font-bold text-green-900">
-            {tokensPerSecond ? `${tokensPerSecond} tok/s` : '-'}
-          </div>
+    <div className="bg-white rounded-lg shadow p-3">
+      {/* Header with inline stats */}
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-xs font-medium text-gray-500 flex items-center gap-1">
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          Streaming Timeline
+        </h3>
+        <div className="flex items-center gap-3 text-xs">
+          <span><span className="text-purple-600 font-medium">TTFT:</span> {ttft}ms</span>
+          <span><span className="text-blue-600 font-medium">Total:</span> {totalDuration}ms</span>
+          {tokensPerSecond && <span className="text-green-600 font-bold">{tokensPerSecond} tok/s</span>}
         </div>
       </div>
 
-      {/* Waterfall Visualization */}
+      {/* Waterfall Visualization - Compact */}
       <div className="relative">
-        {/* Timeline bar */}
-        <div className="flex rounded-lg overflow-hidden h-8 bg-gray-100">
-          {/* TTFT phase (waiting for first token) */}
+        <div className="flex rounded-lg overflow-hidden h-5 bg-gray-100">
           <div
             className="bg-gradient-to-r from-purple-400 to-purple-500 flex items-center justify-center transition-all"
             style={{ width: `${ttftPercent}%` }}
             title={`Time to First Token: ${ttft}ms`}
           >
-            {ttftPercent > 15 && (
-              <span className="text-xs text-white font-medium">TTFT</span>
-            )}
+            {ttftPercent > 20 && <span className="text-[10px] text-white font-medium">TTFT</span>}
           </div>
-          {/* Streaming phase */}
           <div
             className="bg-gradient-to-r from-blue-400 to-blue-500 flex items-center justify-center flex-1"
             title={`Streaming: ${streamingTime}ms`}
           >
-            {(100 - ttftPercent) > 15 && (
-              <span className="text-xs text-white font-medium">Streaming</span>
-            )}
-          </div>
-        </div>
-
-        {/* Timeline markers */}
-        <div className="absolute top-0 left-0 right-0 h-8 pointer-events-none">
-          {/* Start marker */}
-          <div className="absolute left-0 top-0 h-full flex items-center">
-            <div className="w-0.5 h-full bg-gray-400" />
-          </div>
-          {/* TTFT marker */}
-          <div
-            className="absolute top-0 h-full flex items-center"
-            style={{ left: `${ttftPercent}%` }}
-          >
-            <div className="w-0.5 h-full bg-white/50" />
-          </div>
-          {/* End marker */}
-          <div className="absolute right-0 top-0 h-full flex items-center">
-            <div className="w-0.5 h-full bg-gray-400" />
+            {(100 - ttftPercent) > 20 && <span className="text-[10px] text-white font-medium">Streaming</span>}
           </div>
         </div>
       </div>
 
       {/* Timeline labels */}
-      <div className="flex justify-between mt-2 text-xs text-gray-500">
+      <div className="flex justify-between mt-1 text-[10px] text-gray-400">
         <span>0ms</span>
-        <span className="text-purple-600">{ttft}ms</span>
+        <span>{ttft}ms</span>
         <span>{totalDuration}ms</span>
       </div>
-
-      {/* Streaming stats */}
-      {streamingTime > 0 && completionTokens > 0 && (
-        <div className="mt-3 pt-3 border-t text-xs text-gray-500 flex items-center gap-4">
-          <span>
-            Streaming time: <span className="font-medium text-gray-700">{streamingTime}ms</span>
-          </span>
-          <span>
-            Tokens streamed: <span className="font-medium text-gray-700">{completionTokens.toLocaleString()}</span>
-          </span>
-          <span>
-            Avg latency/token: <span className="font-medium text-gray-700">{(streamingTime / completionTokens).toFixed(2)}ms</span>
-          </span>
-        </div>
-      )}
     </div>
   );
 }
 
-// Context Window Visualization
-function ContextWindowBar({ model, promptTokens }: { model: string | null; promptTokens: number | null }) {
-  // Known context window sizes for popular models
-  const contextLimits: Record<string, number> = {
-    // GPT-4 family
-    'gpt-4o': 128000,
-    'gpt-4o-mini': 128000,
-    'gpt-4-turbo': 128000,
-    'gpt-4': 8192,
-    'gpt-4-32k': 32768,
-    'gpt-3.5-turbo': 16385,
-    'gpt-3.5-turbo-16k': 16385,
-    // Claude family
-    'claude-3-opus': 200000,
-    'claude-3-sonnet': 200000,
-    'claude-3-haiku': 200000,
-    'claude-3.5-sonnet': 200000,
-    'claude-3.5-haiku': 200000,
-    'claude-3-5-sonnet': 200000,
-    'claude-3-5-haiku': 200000,
-    'claude-2': 100000,
-    // Gemini
-    'gemini-pro': 32768,
-    'gemini-1.5-pro': 1000000,
-    'gemini-1.5-flash': 1000000,
-    // Mistral
-    'mistral-large': 128000,
-    'mistral-medium': 32768,
-    'mistral-small': 32768,
-    // Llama
-    'llama-3': 8192,
-    'llama-3.1': 128000,
-    'llama-3.2': 128000,
-    // DeepSeek
-    'deepseek-chat': 64000,
-    'deepseek-coder': 64000,
-    // Default
-    'default': 8192,
-  };
+// Context Window Visualization - Compact
+// Uses two-tier approach: 1) Provider's /models endpoint, 2) OpenRouter fallback
+function ContextWindowBar({ model, promptTokens, providerUrl }: { model: string | null; promptTokens: number | null; providerUrl?: string }) {
+  const [contextLimit, setContextLimit] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [source, setSource] = useState<string | null>(null);
 
-  const getContextLimit = (modelName: string | null): number => {
-    if (!modelName) return contextLimits.default;
-    const normalized = modelName.toLowerCase();
-
-    for (const [pattern, limit] of Object.entries(contextLimits)) {
-      if (normalized.includes(pattern)) {
-        return limit;
-      }
+  // Fetch context limit - tries provider first, then OpenRouter fallback
+  useEffect(() => {
+    if (!model) {
+      setContextLimit(null);
+      setSource(null);
+      return;
     }
-    return contextLimits.default;
-  };
+
+    const fetchContextLimit = async () => {
+      setLoading(true);
+      try {
+        // Use unified model info endpoint which handles provider-first + OpenRouter fallback
+        const params = new URLSearchParams();
+        if (providerUrl) {
+          params.set('providerUrl', providerUrl);
+        }
+        const queryString = params.toString();
+        const url = `/api/models/${encodeURIComponent(model)}${queryString ? `?${queryString}` : ''}`;
+
+        const response = await fetch(url);
+        if (response.ok) {
+          const data = await response.json();
+          setContextLimit(data.context_length || null);
+          setSource(data.source || null);
+        } else {
+          setContextLimit(null);
+          setSource(null);
+        }
+      } catch {
+        setContextLimit(null);
+        setSource(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchContextLimit();
+  }, [model, providerUrl]);
 
   if (!promptTokens || promptTokens === 0) return null;
 
-  const contextLimit = getContextLimit(model);
+  if (loading) {
+    return (
+      <div className="bg-white rounded-lg shadow p-3">
+        <div className="flex items-center gap-2 text-xs text-gray-400">
+          <div className="animate-spin h-3 w-3 border border-gray-300 border-t-gray-600 rounded-full"></div>
+          Loading context info...
+        </div>
+      </div>
+    );
+  }
+
+  // Don't show if we couldn't find context limit
+  if (!contextLimit) return null;
+
   const usagePercent = Math.min((promptTokens / contextLimit) * 100, 100);
   const isWarning = usagePercent > 80;
   const isCritical = usagePercent > 95;
@@ -1350,55 +1177,41 @@ function ContextWindowBar({ model, promptTokens }: { model: string | null; promp
   };
 
   return (
-    <div className="bg-white rounded-lg shadow p-4">
+    <div className="bg-white rounded-lg shadow p-3">
+      {/* Header with inline stats */}
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-medium text-gray-900 flex items-center gap-2">
-          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <h3 className="text-xs font-medium text-gray-500 flex items-center gap-1">
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
           </svg>
           Context Window
         </h3>
-        <span className={`text-xs font-medium px-2 py-0.5 rounded ${
-          isCritical ? 'bg-red-100 text-red-800' :
-          isWarning ? 'bg-yellow-100 text-yellow-800' :
-          'bg-green-100 text-green-800'
+        <span className={`text-xs font-medium ${
+          isCritical ? 'text-red-600' : isWarning ? 'text-yellow-600' : 'text-green-600'
         }`}>
           {usagePercent.toFixed(1)}% used
         </span>
       </div>
 
+      {/* Progress bar */}
       <div className="relative">
-        <div className="flex rounded-full overflow-hidden h-3 bg-gray-100">
+        <div className="flex rounded-full overflow-hidden h-2 bg-gray-100">
           <div
-            className={`transition-all ${
-              isCritical ? 'bg-red-500' :
-              isWarning ? 'bg-yellow-500' :
-              'bg-blue-500'
-            }`}
+            className={`transition-all ${isCritical ? 'bg-red-500' : isWarning ? 'bg-yellow-500' : 'bg-blue-500'}`}
             style={{ width: `${usagePercent}%` }}
           />
         </div>
-        {/* Warning threshold marker */}
-        <div
-          className="absolute top-0 h-3 w-0.5 bg-yellow-600 opacity-50"
-          style={{ left: '80%' }}
-          title="80% warning threshold"
-        />
+        <div className="absolute top-0 h-2 w-0.5 bg-yellow-600 opacity-40" style={{ left: '80%' }} title="80% warning" />
       </div>
 
-      <div className="flex justify-between mt-2 text-xs text-gray-500">
+      {/* Labels */}
+      <div className="flex justify-between mt-1 text-[10px] text-gray-400">
         <span>{formatTokens(promptTokens)} tokens used</span>
-        <span>{formatTokens(contextLimit)} limit</span>
+        <span>
+          {formatTokens(contextLimit)} limit
+          {source && <span className="ml-1 opacity-60">({source})</span>}
+        </span>
       </div>
-
-      {isWarning && (
-        <div className={`mt-2 text-xs flex items-center gap-1 ${isCritical ? 'text-red-600' : 'text-yellow-600'}`}>
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-          {isCritical ? 'Context window nearly full!' : 'Approaching context limit'}
-        </div>
-      )}
     </div>
   );
 }
@@ -1585,90 +1398,142 @@ function RequestParametersPanel({ fullRequest }: { fullRequest: string | null })
 function AiDetailsTab({
   aiRequest,
   formatCost,
+  targetUrl,
 }: {
   aiRequest: AiRequest;
   formatCost: (micros: number | null) => string;
+  targetUrl?: string;
 }) {
   const totalTokens = aiRequest.totalTokens || 0;
   const promptTokens = aiRequest.promptTokens || 0;
   const completionTokens = aiRequest.completionTokens || 0;
   const promptPercent = totalTokens > 0 ? (promptTokens / totalTokens) * 100 : 0;
-  const completionPercent = totalTokens > 0 ? (completionTokens / totalTokens) * 100 : 0;
 
   return (
-    <div className="space-y-6">
-      {/* AI Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4 border border-purple-200">
-          <div className="text-xs text-purple-600 font-medium">Provider</div>
-          <div className="text-lg font-bold text-purple-900 capitalize mt-1">
-            {aiRequest.provider}
+    <div className="space-y-4">
+      {/* Compact AI Summary Header */}
+      <div className="bg-white rounded-lg shadow px-4 py-3">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+          {/* Provider */}
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 text-xs font-bold rounded bg-purple-100 text-purple-800 capitalize">
+              {aiRequest.provider}
+            </span>
+            {aiRequest.provider === 'openrouter' && aiRequest.openrouterProviderName && (
+              <span className="text-xs text-gray-500">via {aiRequest.openrouterProviderName}</span>
+            )}
           </div>
+          {/* Model */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-500">Model:</span>
+            <span className="text-sm font-medium text-gray-900 truncate max-w-[200px]" title={aiRequest.model || undefined}>
+              {aiRequest.model || '-'}
+            </span>
+          </div>
+          {/* Tokens */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-500">Tokens:</span>
+            <span className="text-sm font-medium text-gray-900">
+              {totalTokens.toLocaleString()}
+            </span>
+            <span className="text-xs text-gray-400">
+              ({promptTokens.toLocaleString()}↑ {completionTokens.toLocaleString()}↓)
+            </span>
+          </div>
+          {/* Cost */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-500">Cost:</span>
+            <span className="text-sm font-bold text-green-700">
+              {formatCost(aiRequest.totalCostMicros)}
+            </span>
+          </div>
+          {/* Timing */}
+          {aiRequest.totalDuration && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-500">Duration:</span>
+              <span className="text-sm font-medium text-gray-900">{aiRequest.totalDuration}ms</span>
+              {aiRequest.isStreaming && aiRequest.timeToFirstToken && (
+                <span className="text-xs text-gray-400">(TTFT: {aiRequest.timeToFirstToken}ms)</span>
+              )}
+            </div>
+          )}
         </div>
-        <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200">
-          <div className="text-xs text-blue-600 font-medium">Model</div>
-          <div className="text-lg font-bold text-blue-900 mt-1 truncate" title={aiRequest.model || undefined}>
-            {aiRequest.model || '-'}
+
+        {/* Token Usage Bar - Compact inline */}
+        {totalTokens > 0 && (
+          <div className="mt-2 pt-2 border-t border-gray-100">
+            <div className="flex items-center gap-3">
+              <div className="flex-1 flex rounded-full overflow-hidden h-2 bg-gray-100">
+                <div
+                  className="bg-blue-500"
+                  style={{ width: `${promptPercent}%` }}
+                  title={`Prompt: ${promptTokens.toLocaleString()} (${promptPercent.toFixed(1)}%)`}
+                />
+                <div
+                  className="bg-green-500 flex-1"
+                  title={`Completion: ${completionTokens.toLocaleString()}`}
+                />
+              </div>
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-blue-500" />
+                  Prompt: {promptTokens.toLocaleString()} ({promptPercent.toFixed(1)}%)
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-green-500" />
+                  Completion: {completionTokens.toLocaleString()} ({(100 - promptPercent).toFixed(1)}%)
+                </span>
+              </div>
+            </div>
           </div>
-        </div>
-        <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4 border border-green-200">
-          <div className="text-xs text-green-600 font-medium">Total Tokens</div>
-          <div className="text-lg font-bold text-green-900 mt-1">
-            {aiRequest.totalTokens?.toLocaleString() || '-'}
-          </div>
-          <div className="text-xs text-green-600 mt-1">
-            {promptTokens.toLocaleString()} in / {completionTokens.toLocaleString()} out
-          </div>
-        </div>
-        <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg p-4 border border-amber-200">
-          <div className="text-xs text-amber-600 font-medium">Total Cost</div>
-          <div className="text-lg font-bold text-amber-900 mt-1">
-            {formatCost(aiRequest.totalCostMicros)}
-          </div>
-          <div className="text-xs text-amber-600 mt-1">
-            {formatCost(aiRequest.inputCostMicros)} / {formatCost(aiRequest.outputCostMicros)}
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* Token Usage Bar */}
-      {totalTokens > 0 && (
-        <div className="bg-white rounded-lg shadow p-4">
-          <h3 className="text-sm font-medium text-gray-900 mb-3">Token Usage</h3>
-          <div className="flex rounded-full overflow-hidden h-4 bg-gray-100">
-            <div
-              className="bg-blue-500 transition-all"
-              style={{ width: `${promptPercent}%` }}
-              title={`Prompt: ${promptTokens.toLocaleString()} tokens`}
-            />
-            <div
-              className="bg-green-500 transition-all"
-              style={{ width: `${completionPercent}%` }}
-              title={`Completion: ${completionTokens.toLocaleString()} tokens`}
-            />
-          </div>
-          <div className="flex justify-between mt-2 text-xs text-gray-500">
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-blue-500" />
-              Prompt: {promptTokens.toLocaleString()} ({promptPercent.toFixed(1)}%)
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-green-500" />
-              Completion: {completionTokens.toLocaleString()} ({completionPercent.toFixed(1)}%)
-            </span>
-          </div>
+      {/* Streaming Timeline + Context Window - Combined compact row */}
+      {(aiRequest.isStreaming || aiRequest.promptTokens) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <TimingWaterfall aiRequest={aiRequest} />
+          <ContextWindowBar model={aiRequest.model} promptTokens={aiRequest.promptTokens} providerUrl={targetUrl} />
         </div>
       )}
 
-      {/* Enhanced Timing Visualization */}
-      <TimingWaterfall aiRequest={aiRequest} />
-
-      {/* Context Window Visualization */}
-      <ContextWindowBar model={aiRequest.model} promptTokens={aiRequest.promptTokens} />
-
-      {/* OpenRouter Details Panel */}
+      {/* OpenRouter Details Panel - Collapsible */}
       {aiRequest.provider === 'openrouter' && (
-        <OpenRouterPanel aiRequest={aiRequest} />
+        <details className="group">
+          <summary className="cursor-pointer list-none">
+            <div className="bg-gradient-to-r from-purple-500 to-purple-600 rounded-lg px-4 py-3 flex items-center justify-between hover:from-purple-600 hover:to-purple-700 transition-colors">
+              <h3 className="text-sm font-medium text-white flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                OpenRouter Insights
+                {aiRequest.openrouterProviderName && (
+                  <span className="text-purple-200 font-normal">
+                    via {aiRequest.openrouterProviderName}
+                  </span>
+                )}
+              </h3>
+              <div className="flex items-center gap-3">
+                {aiRequest.openrouterTotalCost != null && (
+                  <span className="text-white text-sm font-medium">
+                    ${aiRequest.openrouterTotalCost.toFixed(6)}
+                  </span>
+                )}
+                <svg
+                  className="w-4 h-4 text-white transition-transform group-open:rotate-180"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
+          </summary>
+          <div className="mt-1">
+            <OpenRouterPanel aiRequest={aiRequest} />
+          </div>
+        </details>
       )}
 
       {/* Request Parameters Panel */}
@@ -1680,40 +1545,42 @@ function AiDetailsTab({
       {/* Quick Replay Actions */}
       <QuickReplayPanel aiRequest={aiRequest} />
 
-      {/* Full Request/Response JSON */}
-      <details className="bg-white rounded-lg shadow group">
-        <summary className="p-4 cursor-pointer text-sm font-medium text-gray-900 flex items-center justify-between hover:bg-gray-50">
-          <span className="flex items-center gap-2">
-            <svg className="w-4 h-4 text-gray-400 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-            Full Request JSON
-          </span>
-          {aiRequest.fullRequest && (
-            <CopyButton text={aiRequest.fullRequest} label="Copy" showLabel={false} variant="ghost" />
-          )}
-        </summary>
-        <div className="px-4 pb-4">
-          <SmartBodyViewer content={aiRequest.fullRequest} maxHeight="max-h-96" />
-        </div>
-      </details>
+      {/* Full Request/Response JSON - Combined in one row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <details className="bg-white rounded-lg shadow group">
+          <summary className="px-4 py-2 cursor-pointer text-sm font-medium text-gray-900 flex items-center justify-between hover:bg-gray-50">
+            <span className="flex items-center gap-2">
+              <svg className="w-4 h-4 text-gray-400 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+              Full Request JSON
+            </span>
+            {aiRequest.fullRequest && (
+              <CopyButton text={aiRequest.fullRequest} label="Copy" showLabel={false} variant="ghost" />
+            )}
+          </summary>
+          <div className="px-4 pb-4">
+            <SmartBodyViewer content={aiRequest.fullRequest} maxHeight="max-h-64" />
+          </div>
+        </details>
 
-      <details className="bg-white rounded-lg shadow group">
-        <summary className="p-4 cursor-pointer text-sm font-medium text-gray-900 flex items-center justify-between hover:bg-gray-50">
-          <span className="flex items-center gap-2">
-            <svg className="w-4 h-4 text-gray-400 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-            Full Response JSON
-          </span>
-          {aiRequest.fullResponse && (
-            <CopyButton text={aiRequest.fullResponse} label="Copy" showLabel={false} variant="ghost" />
-          )}
-        </summary>
-        <div className="px-4 pb-4">
-          <SmartBodyViewer content={aiRequest.fullResponse} maxHeight="max-h-96" />
-        </div>
-      </details>
+        <details className="bg-white rounded-lg shadow group">
+          <summary className="px-4 py-2 cursor-pointer text-sm font-medium text-gray-900 flex items-center justify-between hover:bg-gray-50">
+            <span className="flex items-center gap-2">
+              <svg className="w-4 h-4 text-gray-400 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+              Full Response JSON
+            </span>
+            {aiRequest.fullResponse && (
+              <CopyButton text={aiRequest.fullResponse} label="Copy" showLabel={false} variant="ghost" />
+            )}
+          </summary>
+          <div className="px-4 pb-4">
+            <SmartBodyViewer content={aiRequest.fullResponse} maxHeight="max-h-64" />
+          </div>
+        </details>
+      </div>
     </div>
   );
 }

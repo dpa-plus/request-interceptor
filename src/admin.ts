@@ -4,6 +4,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { prisma } from './lib/prisma.js';
 import { adminAuth, rateLimiter } from './middleware/adminAuth.js';
+import { getModelInfo as getOpenRouterModelInfo, getAllModels, getCacheStats as getOpenRouterCacheStats, refreshCache as refreshOpenRouterCache } from './lib/openRouterModels.js';
+import { getModelInfo, getContextLength, getCacheStats as getModelServiceCacheStats } from './lib/modelInfoService.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -845,6 +847,102 @@ export function createAdminApp() {
     } catch (error) {
       console.error('Error updating config:', error);
       res.status(500).json({ error: 'Failed to update config' });
+    }
+  });
+
+  // ==================== MODEL INFO (Provider-first, OpenRouter fallback) ====================
+
+  // Get model info by ID with optional provider base URL
+  // Uses two-tier approach: 1) Provider's /models endpoint, 2) OpenRouter fallback
+  app.get('/api/models/:modelId(*)', async (req, res) => {
+    try {
+      const modelId = (req.params as Record<string, string>)['modelId(*)'];
+      const providerBaseUrl = req.query.providerUrl as string | undefined;
+
+      const model = await getModelInfo(modelId, providerBaseUrl);
+
+      if (!model) {
+        res.status(404).json({ error: 'Model not found', modelId });
+        return;
+      }
+
+      res.json(model);
+    } catch (error) {
+      console.error('Error fetching model info:', error);
+      res.status(500).json({ error: 'Failed to fetch model info' });
+    }
+  });
+
+  // Get just context length (convenience endpoint)
+  app.get('/api/models/:modelId(*)/context-length', async (req, res) => {
+    try {
+      const modelId = (req.params as Record<string, string>)['modelId(*)'];
+      const providerBaseUrl = req.query.providerUrl as string | undefined;
+
+      const contextLength = await getContextLength(modelId, providerBaseUrl);
+
+      if (contextLength === null) {
+        res.status(404).json({ error: 'Context length not found', modelId });
+        return;
+      }
+
+      res.json({ modelId, context_length: contextLength });
+    } catch (error) {
+      console.error('Error fetching context length:', error);
+      res.status(500).json({ error: 'Failed to fetch context length' });
+    }
+  });
+
+  // ==================== OPENROUTER MODELS (Direct access) ====================
+
+  // Get model info directly from OpenRouter (bypasses provider check)
+  app.get('/api/openrouter/models/:modelId(*)', async (req, res) => {
+    try {
+      const modelId = (req.params as Record<string, string>)['modelId(*)'];
+      const model = await getOpenRouterModelInfo(modelId);
+
+      if (!model) {
+        res.status(404).json({ error: 'Model not found in OpenRouter', modelId });
+        return;
+      }
+
+      res.json(model);
+    } catch (error) {
+      console.error('Error fetching OpenRouter model info:', error);
+      res.status(500).json({ error: 'Failed to fetch model info' });
+    }
+  });
+
+  // Get all models from OpenRouter (for model selector, search, etc.)
+  app.get('/api/openrouter/models', async (_req, res) => {
+    try {
+      const models = await getAllModels();
+      res.json({ models, count: models.length });
+    } catch (error) {
+      console.error('Error fetching models:', error);
+      res.status(500).json({ error: 'Failed to fetch models' });
+    }
+  });
+
+  // Get cache stats (both provider cache and OpenRouter cache)
+  app.get('/api/models/cache-stats', (_req, res) => {
+    const openRouterStats = getOpenRouterCacheStats();
+    const modelServiceStats = getModelServiceCacheStats();
+    res.json({
+      openRouter: openRouterStats,
+      providerCache: modelServiceStats,
+    });
+  });
+
+  // Force refresh OpenRouter cache
+  app.post('/api/openrouter/refresh-cache', async (_req, res) => {
+    try {
+      await refreshOpenRouterCache();
+      const stats = getOpenRouterCacheStats();
+      res.json({ success: true, ...stats });
+    } catch (error) {
+      console.error('Error refreshing cache:', error);
+      res.status(500).json({ error: 'Failed to refresh cache' });
     }
   });
 

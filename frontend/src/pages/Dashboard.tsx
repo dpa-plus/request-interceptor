@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useSocket, RequestStartEvent, RequestCompleteEvent } from '../hooks/useSocket';
@@ -37,17 +37,22 @@ interface LogsResponse {
   offset: number;
 }
 
+const LOGS_PER_PAGE = 50;
+
 function Dashboard() {
   const navigate = useNavigate();
   const [logs, setLogs] = useState<RequestLog[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'ai' | 'regular'>('all');
   const [methodFilter, setMethodFilter] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   // Handle incoming request from Socket.IO
   const handleRequestStart = useCallback((event: RequestStartEvent) => {
@@ -112,10 +117,12 @@ function Dashboard() {
     onRequestComplete: handleRequestComplete,
   });
 
-  const fetchLogs = useCallback(async () => {
+  const fetchLogs = useCallback(async (reset = true) => {
     try {
-      setLoading(true);
-      const params = new URLSearchParams({ limit: '100' });
+      if (reset) {
+        setLoading(true);
+      }
+      const params = new URLSearchParams({ limit: String(LOGS_PER_PAGE) });
       if (filter === 'ai') params.set('isAiRequest', 'true');
       if (filter === 'regular') params.set('isAiRequest', 'false');
       if (methodFilter) params.set('method', methodFilter);
@@ -125,6 +132,7 @@ function Dashboard() {
       const data: LogsResponse = await response.json();
       setLogs(data.logs);
       setTotal(data.total);
+      setHasMore(data.logs.length < data.total);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
@@ -133,12 +141,66 @@ function Dashboard() {
     }
   }, [filter, methodFilter]);
 
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+
+    try {
+      setLoadingMore(true);
+      const params = new URLSearchParams({
+        limit: String(LOGS_PER_PAGE),
+        offset: String(logs.length),
+      });
+      if (filter === 'ai') params.set('isAiRequest', 'true');
+      if (filter === 'regular') params.set('isAiRequest', 'false');
+      if (methodFilter) params.set('method', methodFilter);
+
+      const response = await fetch(`/api/logs?${params}`);
+      if (!response.ok) throw new Error('Failed to fetch more logs');
+      const data: LogsResponse = await response.json();
+
+      setLogs((prev) => {
+        // Avoid duplicates
+        const existingIds = new Set(prev.map((l) => l.id));
+        const newLogs = data.logs.filter((l) => !existingIds.has(l.id));
+        return [...prev, ...newLogs];
+      });
+      setHasMore(logs.length + data.logs.length < data.total);
+    } catch (err) {
+      console.error('Failed to load more:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, hasMore, logs.length, filter, methodFilter]);
+
   useEffect(() => {
     fetchLogs();
     // Fallback polling every 30s (in case socket connection fails)
-    const interval = setInterval(fetchLogs, 30000);
+    const interval = setInterval(() => fetchLogs(false), 30000);
     return () => clearInterval(interval);
   }, [fetchLogs]);
+
+  // Infinite scroll with Intersection Observer
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
+          loadMore();
+        }
+      },
+      { threshold: 0.1, rootMargin: '100px' }
+    );
+
+    const currentRef = loadMoreRef.current;
+    if (currentRef) {
+      observer.observe(currentRef);
+    }
+
+    return () => {
+      if (currentRef) {
+        observer.unobserve(currentRef);
+      }
+    };
+  }, [hasMore, loadingMore, loading, loadMore]);
 
   const clearLogs = async () => {
     try {
@@ -247,7 +309,7 @@ function Dashboard() {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={fetchLogs}
+            onClick={() => fetchLogs()}
             className="p-2 bg-white border border-gray-300 rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
             title="Refresh"
           >
@@ -499,6 +561,22 @@ function Dashboard() {
               )}
             </tbody>
           </table>
+
+          {/* Infinite scroll trigger */}
+          <div ref={loadMoreRef} className="py-4 flex justify-center">
+            {loadingMore && (
+              <div className="flex items-center gap-2 text-gray-500">
+                <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                <span>Loading more...</span>
+              </div>
+            )}
+            {!hasMore && logs.length > 0 && (
+              <span className="text-sm text-gray-400">All {total.toLocaleString()} requests loaded</span>
+            )}
+          </div>
         </div>
       </div>
 

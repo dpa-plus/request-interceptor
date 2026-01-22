@@ -69,6 +69,9 @@ export interface ParsedAiResponse {
   totalTokens: number | null;
   model: string | null;
   fullResponse: any;
+  // Tool calls from the response
+  toolCalls?: ToolCall[];
+  finishReason?: string;
 }
 
 export interface CostEstimate {
@@ -315,6 +318,8 @@ export function parseAiResponse(body: any, isStreaming: boolean): ParsedAiRespon
   let completionTokens: number | null = null;
   let totalTokens: number | null = null;
   let model: string | null = null;
+  let toolCalls: ToolCall[] | undefined = undefined;
+  let finishReason: string | undefined = undefined;
 
   if (!body) {
     return { assistantResponse, promptTokens, completionTokens, totalTokens, model, fullResponse: body };
@@ -328,6 +333,18 @@ export function parseAiResponse(body: any, isStreaming: boolean): ParsedAiRespon
     } else if (choice?.text) {
       assistantResponse = choice.text;
     }
+
+    // Extract tool calls from response
+    if (choice?.message?.tool_calls) {
+      toolCalls = parseToolCalls(choice.message.tool_calls) || undefined;
+    } else if (choice?.message?.function_call) {
+      toolCalls = parseToolCalls(choice.message.function_call) || undefined;
+    }
+
+    // Extract finish reason
+    if (choice?.finish_reason) {
+      finishReason = choice.finish_reason;
+    }
   }
 
   // Anthropic response format
@@ -337,6 +354,24 @@ export function parseAiResponse(body: any, isStreaming: boolean): ParsedAiRespon
       .map((c: any) => c.text)
       .join('\n');
     if (textContent) assistantResponse = textContent;
+
+    // Anthropic tool_use blocks
+    const toolUseBlocks = body.content.filter((c: any) => c.type === 'tool_use');
+    if (toolUseBlocks.length > 0) {
+      toolCalls = toolUseBlocks.map((block: any) => ({
+        id: block.id || '',
+        type: 'function' as const,
+        function: {
+          name: block.name || '',
+          arguments: typeof block.input === 'string' ? block.input : JSON.stringify(block.input || {}),
+        },
+      }));
+    }
+  }
+
+  // Anthropic stop_reason
+  if (body.stop_reason) {
+    finishReason = body.stop_reason;
   }
 
   // Usage
@@ -355,6 +390,8 @@ export function parseAiResponse(body: any, isStreaming: boolean): ParsedAiRespon
     totalTokens,
     model,
     fullResponse: body,
+    toolCalls,
+    finishReason,
   };
 }
 
@@ -365,6 +402,10 @@ export function parseStreamedResponse(chunks: string[]): ParsedAiResponse {
   let totalTokens: number | null = null;
   let model: string | null = null;
   let fullResponse: any[] = [];
+  let finishReason: string | undefined = undefined;
+
+  // Collect tool calls from streaming (OpenAI streams tool calls incrementally)
+  const toolCallsMap = new Map<number, { id: string; type: 'function'; function: { name: string; arguments: string } }>();
 
   for (const chunk of chunks) {
     // Skip empty lines and [DONE]
@@ -379,9 +420,37 @@ export function parseStreamedResponse(chunks: string[]): ParsedAiResponse {
         assistantResponse += data.choices[0].delta.content;
       }
 
+      // Extract tool calls from delta (OpenAI streams tool calls incrementally)
+      if (data.choices?.[0]?.delta?.tool_calls) {
+        for (const tc of data.choices[0].delta.tool_calls) {
+          const index = tc.index ?? 0;
+          if (!toolCallsMap.has(index)) {
+            toolCallsMap.set(index, {
+              id: tc.id || '',
+              type: 'function',
+              function: { name: '', arguments: '' },
+            });
+          }
+          const existing = toolCallsMap.get(index)!;
+          if (tc.id) existing.id = tc.id;
+          if (tc.function?.name) existing.function.name += tc.function.name;
+          if (tc.function?.arguments) existing.function.arguments += tc.function.arguments;
+        }
+      }
+
+      // Extract finish reason
+      if (data.choices?.[0]?.finish_reason) {
+        finishReason = data.choices[0].finish_reason;
+      }
+
       // Anthropic streaming
       if (data.delta?.text) {
         assistantResponse += data.delta.text;
+      }
+
+      // Anthropic stop_reason
+      if (data.delta?.stop_reason) {
+        finishReason = data.delta.stop_reason;
       }
 
       // Model (usually in first chunk)
@@ -408,6 +477,11 @@ export function parseStreamedResponse(chunks: string[]): ParsedAiResponse {
     }
   }
 
+  // Convert tool calls map to array
+  const toolCalls = toolCallsMap.size > 0
+    ? Array.from(toolCallsMap.values()).filter(tc => tc.function.name)
+    : undefined;
+
   return {
     assistantResponse: assistantResponse || null,
     promptTokens,
@@ -415,6 +489,8 @@ export function parseStreamedResponse(chunks: string[]): ParsedAiResponse {
     totalTokens,
     model,
     fullResponse,
+    toolCalls,
+    finishReason,
   };
 }
 

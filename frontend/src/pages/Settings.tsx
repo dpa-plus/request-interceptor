@@ -294,35 +294,91 @@ function Settings() {
 
       {/* Usage Instructions */}
       <div className="bg-white shadow rounded-lg p-6 mt-6">
-        <h2 className="text-lg font-medium text-gray-900 mb-4">Usage</h2>
+        <h2 className="text-lg font-medium text-gray-900 mb-4">Target Routing</h2>
+        <p className="text-sm text-gray-500 mb-4">
+          The proxy needs to know where to forward requests. There are three ways to specify the target (in priority order):
+        </p>
 
-        <div className="space-y-4 text-sm text-gray-600">
+        <div className="space-y-6 text-sm text-gray-600">
           <div>
-            <h3 className="font-medium text-gray-900">__target Query Parameter</h3>
-            <p className="mt-1">
-              Add <code className="bg-gray-100 px-1 rounded">__target=https://api.example.com</code> to any request to override the target URL.
+            <h3 className="font-medium text-gray-900 flex items-center gap-2">
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-800 text-xs font-bold">1</span>
+              Query Parameter
+            </h3>
+            <p className="mt-1 ml-7">
+              Add <code className="bg-gray-100 px-1 rounded">__target</code> to the URL. The parameter is stripped before forwarding.
             </p>
-            <pre className="mt-2 p-3 bg-gray-50 rounded text-xs overflow-auto">
+            <pre className="mt-2 ml-7 p-3 bg-gray-50 rounded text-xs overflow-auto">
 {`curl "http://localhost:3001/v1/chat/completions?__target=https://api.openai.com" \\
   -H "Authorization: Bearer $OPENAI_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{"model": "gpt-4o-mini", "messages": [{"role": "user", "content": "Hello!"}]}'`}
+  -d '{"model": "gpt-4o-mini", "messages": [...]}'`}
             </pre>
           </div>
 
           <div>
-            <h3 className="font-medium text-gray-900">Routing Rules</h3>
-            <p className="mt-1">
-              Configure routing rules to automatically route requests based on path patterns or headers.
-              Rules are evaluated in priority order (highest first).
+            <h3 className="font-medium text-gray-900 flex items-center gap-2">
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-800 text-xs font-bold">2</span>
+              X-Target-URL Header
+            </h3>
+            <p className="mt-1 ml-7">
+              Set the <code className="bg-gray-100 px-1 rounded">X-Target-URL</code> header. The header is stripped before forwarding.
             </p>
+            <pre className="mt-2 ml-7 p-3 bg-gray-50 rounded text-xs overflow-auto">
+{`curl http://localhost:3001/v1/chat/completions \\
+  -H "X-Target-URL: https://api.openai.com" \\
+  -H "Authorization: Bearer $OPENAI_API_KEY" \\
+  -d '{"model": "gpt-4o-mini", "messages": [...]}'`}
+            </pre>
           </div>
 
+          <div>
+            <h3 className="font-medium text-gray-900 flex items-center gap-2">
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-800 text-xs font-bold">3</span>
+              Routing Rules / Default Target
+            </h3>
+            <p className="mt-1 ml-7">
+              If no query parameter or header is provided, the proxy checks configured routing rules (by priority).
+              If no rule matches, the default target URL (configured above) is used.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Additional Info */}
+      <div className="bg-white shadow rounded-lg p-6 mt-6">
+        <h2 className="text-lg font-medium text-gray-900 mb-4">Features</h2>
+
+        <div className="space-y-4 text-sm text-gray-600">
           <div>
             <h3 className="font-medium text-gray-900">AI Request Detection</h3>
             <p className="mt-1">
               Requests to OpenAI-compatible endpoints (e.g., <code className="bg-gray-100 px-1 rounded">/v1/chat/completions</code>)
-              are automatically detected and parsed. The proxy supports both streaming and non-streaming responses.
+              are automatically detected and parsed. The proxy supports both streaming and non-streaming responses,
+              extracting token usage and calculating cost estimates.
+            </p>
+          </div>
+
+          <div>
+            <h3 className="font-medium text-gray-900">OpenRouter Integration</h3>
+            <p className="mt-1">
+              For OpenRouter requests, the proxy fetches additional metadata (actual provider, precise costs)
+              from the OpenRouter Generation API after the request completes.
+            </p>
+          </div>
+
+          <div>
+            <h3 className="font-medium text-gray-900">Data Retention</h3>
+            <p className="mt-1">
+              Request logs are automatically deleted after <strong>30 days</strong>.
+              Authorization headers are redacted after <strong>3 days</strong> for security.
+            </p>
+          </div>
+
+          <div>
+            <h3 className="font-medium text-gray-900">Real-time Updates</h3>
+            <p className="mt-1">
+              The dashboard uses Socket.IO for real-time updates. New requests appear immediately
+              and update when the response is received.
             </p>
           </div>
         </div>

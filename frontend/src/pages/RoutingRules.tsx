@@ -299,10 +299,14 @@ function RoutingRules() {
           </li>
           <li className="flex items-center gap-2">
             <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-200 text-blue-800 text-xs flex items-center justify-center font-bold">2</span>
-            Routing rules (by priority, highest number first)
+            <code className="bg-blue-100 px-1 rounded">X-Target-URL</code> header
           </li>
           <li className="flex items-center gap-2">
             <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-200 text-blue-800 text-xs flex items-center justify-center font-bold">3</span>
+            Routing rules (by priority, highest number first)
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-200 text-blue-800 text-xs flex items-center justify-center font-bold">4</span>
             Default target URL from settings
           </li>
         </ol>
