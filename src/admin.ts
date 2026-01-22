@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import { prisma } from './lib/prisma.js';
 import { adminAuth, rateLimiter } from './middleware/adminAuth.js';
 import { getModelInfo as getOpenRouterModelInfo, getAllModels, getCacheStats as getOpenRouterCacheStats, refreshCache as refreshOpenRouterCache } from './lib/openRouterModels.js';
-import { getModelInfo, getContextLength, getCacheStats as getModelServiceCacheStats } from './lib/modelInfoService.js';
+import { getModelInfo, getContextLength } from './lib/modelInfoService.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -850,16 +850,22 @@ export function createAdminApp() {
     }
   });
 
-  // ==================== MODEL INFO (Provider-first, OpenRouter fallback) ====================
+  // ==================== MODEL INFO ====================
 
-  // Get model info by ID with optional provider base URL
-  // Uses two-tier approach: 1) Provider's /models endpoint, 2) OpenRouter fallback
+  // Get model info - uses OpenRouter as primary source (no auth needed)
+  // For provider-specific info, use the request-based endpoint below
   app.get('/api/models/:modelId(*)', async (req, res) => {
     try {
-      const modelId = (req.params as Record<string, string>)['modelId(*)'];
-      const providerBaseUrl = req.query.providerUrl as string | undefined;
+      const params = req.params as Record<string, string>;
+      const modelId = params['modelId(*)'] || params['modelId'] || params['0'];
 
-      const model = await getModelInfo(modelId, providerBaseUrl);
+      if (!modelId) {
+        res.status(400).json({ error: 'Model ID is required' });
+        return;
+      }
+
+      // Only use OpenRouter - no provider auth issues
+      const model = await getModelInfo(modelId);
 
       if (!model) {
         res.status(404).json({ error: 'Model not found', modelId });
@@ -873,13 +879,114 @@ export function createAdminApp() {
     }
   });
 
+  // Get model info by replaying auth from an existing request
+  // This allows fetching from providers that require authentication
+  app.get('/api/models/:modelId(*)/from-request/:requestId', async (req, res) => {
+    try {
+      const params = req.params as Record<string, string>;
+      const modelId = params['modelId(*)'] || params['modelId'] || params['0'];
+      const requestId = req.params.requestId;
+
+      if (!modelId || !requestId) {
+        res.status(400).json({ error: 'Model ID and Request ID are required' });
+        return;
+      }
+
+      // Get the original request to extract auth headers
+      const originalRequest = await prisma.requestLog.findUnique({
+        where: { id: requestId },
+        select: { headers: true, targetUrl: true },
+      });
+
+      if (!originalRequest) {
+        res.status(404).json({ error: 'Request not found', requestId });
+        return;
+      }
+
+      // Parse headers and extract auth
+      let authHeader: string | null = null;
+      try {
+        const headers = JSON.parse(originalRequest.headers);
+        authHeader = headers['authorization'] || headers['Authorization'] || null;
+      } catch {
+        // Headers couldn't be parsed
+      }
+
+      if (!authHeader) {
+        // Fall back to OpenRouter if no auth available
+        const model = await getModelInfo(modelId);
+        if (model) {
+          res.json(model);
+          return;
+        }
+        res.status(404).json({ error: 'Model not found and no auth available for provider lookup', modelId });
+        return;
+      }
+
+      // Extract base URL from target
+      const targetUrl = originalRequest.targetUrl;
+      const baseUrl = new URL(targetUrl).origin;
+
+      // Try to fetch from provider with auth replay
+      try {
+        const response = await fetch(`${baseUrl}/v1/models`, {
+          method: 'GET',
+          headers: {
+            'Authorization': authHeader,
+            'Accept': 'application/json',
+          },
+          signal: AbortSignal.timeout(5000),
+        });
+
+        if (response.ok) {
+          const data = await response.json() as any;
+          const models = data.data || data.models || (Array.isArray(data) ? data : []);
+
+          const foundModel = models.find((m: any) => m.id === modelId || m.name === modelId);
+          if (foundModel) {
+            res.json({
+              id: foundModel.id,
+              name: foundModel.name || foundModel.id,
+              context_length: foundModel.context_length || foundModel.context_window || foundModel.max_tokens || null,
+              pricing: foundModel.pricing ? {
+                prompt: parseFloat(foundModel.pricing.prompt) || 0,
+                completion: parseFloat(foundModel.pricing.completion) || 0,
+              } : undefined,
+              source: 'provider',
+            });
+            return;
+          }
+        }
+      } catch (fetchError) {
+        console.log(`[Model Info] Auth replay to ${baseUrl} failed:`, fetchError);
+      }
+
+      // Fall back to OpenRouter
+      const model = await getModelInfo(modelId);
+      if (model) {
+        res.json(model);
+        return;
+      }
+
+      res.status(404).json({ error: 'Model not found', modelId });
+    } catch (error) {
+      console.error('Error fetching model info with auth replay:', error);
+      res.status(500).json({ error: 'Failed to fetch model info' });
+    }
+  });
+
   // Get just context length (convenience endpoint)
   app.get('/api/models/:modelId(*)/context-length', async (req, res) => {
     try {
-      const modelId = (req.params as Record<string, string>)['modelId(*)'];
-      const providerBaseUrl = req.query.providerUrl as string | undefined;
+      const params = req.params as Record<string, string>;
+      const modelId = params['modelId(*)'] || params['modelId'] || params['0'];
 
-      const contextLength = await getContextLength(modelId, providerBaseUrl);
+      if (!modelId) {
+        res.status(400).json({ error: 'Model ID is required' });
+        return;
+      }
+
+      const contextLength = await getContextLength(modelId);
 
       if (contextLength === null) {
         res.status(404).json({ error: 'Context length not found', modelId });
@@ -924,13 +1031,11 @@ export function createAdminApp() {
     }
   });
 
-  // Get cache stats (both provider cache and OpenRouter cache)
+  // Get cache stats (OpenRouter cache)
   app.get('/api/models/cache-stats', (_req, res) => {
     const openRouterStats = getOpenRouterCacheStats();
-    const modelServiceStats = getModelServiceCacheStats();
     res.json({
       openRouter: openRouterStats,
-      providerCache: modelServiceStats,
     });
   });
 

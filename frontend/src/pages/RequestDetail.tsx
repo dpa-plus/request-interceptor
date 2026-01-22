@@ -427,7 +427,7 @@ function RequestDetail() {
         )}
 
         {activeTab === 'ai' && log.aiRequest && (
-          <AiDetailsTab aiRequest={log.aiRequest} formatCost={formatCost} targetUrl={log.targetUrl} />
+          <AiDetailsTab aiRequest={log.aiRequest} formatCost={formatCost} requestId={log.id} />
         )}
       </div>
     </div>
@@ -1105,13 +1105,13 @@ function TimingWaterfall({ aiRequest }: { aiRequest: AiRequest }) {
 }
 
 // Context Window Visualization - Compact
-// Uses two-tier approach: 1) Provider's /models endpoint, 2) OpenRouter fallback
-function ContextWindowBar({ model, promptTokens, providerUrl }: { model: string | null; promptTokens: number | null; providerUrl?: string }) {
+// Uses OpenRouter for model info, or auth-replay via requestId for provider-specific lookups
+function ContextWindowBar({ model, promptTokens, requestId }: { model: string | null; promptTokens: number | null; requestId?: string }) {
   const [contextLimit, setContextLimit] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [source, setSource] = useState<string | null>(null);
 
-  // Fetch context limit - tries provider first, then OpenRouter fallback
+  // Fetch context limit from OpenRouter (or via auth-replay if requestId provided)
   useEffect(() => {
     if (!model) {
       setContextLimit(null);
@@ -1122,13 +1122,11 @@ function ContextWindowBar({ model, promptTokens, providerUrl }: { model: string 
     const fetchContextLimit = async () => {
       setLoading(true);
       try {
-        // Use unified model info endpoint which handles provider-first + OpenRouter fallback
-        const params = new URLSearchParams();
-        if (providerUrl) {
-          params.set('providerUrl', providerUrl);
-        }
-        const queryString = params.toString();
-        const url = `/api/models/${encodeURIComponent(model)}${queryString ? `?${queryString}` : ''}`;
+        // If we have a requestId, use auth-replay endpoint for provider-specific lookup
+        // Otherwise use the standard OpenRouter-based endpoint
+        const url = requestId
+          ? `/api/models/${encodeURIComponent(model)}/from-request/${encodeURIComponent(requestId)}`
+          : `/api/models/${encodeURIComponent(model)}`;
 
         const response = await fetch(url);
         if (response.ok) {
@@ -1148,7 +1146,7 @@ function ContextWindowBar({ model, promptTokens, providerUrl }: { model: string 
     };
 
     fetchContextLimit();
-  }, [model, providerUrl]);
+  }, [model, requestId]);
 
   if (!promptTokens || promptTokens === 0) return null;
 
@@ -1398,11 +1396,11 @@ function RequestParametersPanel({ fullRequest }: { fullRequest: string | null })
 function AiDetailsTab({
   aiRequest,
   formatCost,
-  targetUrl,
+  requestId,
 }: {
   aiRequest: AiRequest;
   formatCost: (micros: number | null) => string;
-  targetUrl?: string;
+  requestId: string;
 }) {
   const totalTokens = aiRequest.totalTokens || 0;
   const promptTokens = aiRequest.promptTokens || 0;
@@ -1493,7 +1491,7 @@ function AiDetailsTab({
       {(aiRequest.isStreaming || aiRequest.promptTokens) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <TimingWaterfall aiRequest={aiRequest} />
-          <ContextWindowBar model={aiRequest.model} promptTokens={aiRequest.promptTokens} providerUrl={targetUrl} />
+          <ContextWindowBar model={aiRequest.model} promptTokens={aiRequest.promptTokens} requestId={requestId} />
         </div>
       )}
 
