@@ -16,15 +16,41 @@ interface ToolCall {
   };
 }
 
-// Conversation message structure
+// Multimodal content part types
+interface TextContentPart {
+  type: 'text';
+  text: string;
+}
+
+interface ImageUrlContentPart {
+  type: 'image_url';
+  image_url: {
+    url: string;
+    detail?: 'auto' | 'low' | 'high';
+  };
+}
+
+interface InputAudioContentPart {
+  type: 'input_audio';
+  input_audio: {
+    data: string;  // base64 encoded audio
+    format: 'mp3' | 'wav' | 'webm' | 'ogg' | 'flac' | string;
+  };
+}
+
+type ContentPart = TextContentPart | ImageUrlContentPart | InputAudioContentPart;
+
+// Conversation message structure - content can be string or array of content parts
 interface ConversationMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string | null;
+  content: string | ContentPart[] | null;
   toolCalls?: ToolCall[];
   toolCallId?: string;
   toolName?: string;
   hasImages?: boolean;
   imageCount?: number;
+  hasAudio?: boolean;
+  audioCount?: number;
 }
 
 interface AiRequest {
@@ -573,6 +599,102 @@ function OpenRouterPanel({ aiRequest }: { aiRequest: AiRequest }) {
   );
 }
 
+// Message Content Component - handles both string and multimodal content arrays
+function MessageContent({ content, bubbleClass }: { content: string | ContentPart[]; bubbleClass: string }) {
+  // Simple string content
+  if (typeof content === 'string') {
+    return (
+      <div className={`${bubbleClass} whitespace-pre-wrap break-words`}>
+        {content}
+      </div>
+    );
+  }
+
+  // Multimodal content array
+  if (Array.isArray(content) && content.length > 0) {
+    return (
+      <div className="space-y-2">
+        {content.map((part, index) => {
+          if (part.type === 'text') {
+            return (
+              <div key={index} className={`${bubbleClass} whitespace-pre-wrap break-words`}>
+                {part.text}
+              </div>
+            );
+          }
+
+          if (part.type === 'image_url') {
+            const isDataUrl = part.image_url.url.startsWith('data:');
+            return (
+              <div key={index} className={`${bubbleClass}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <span className="text-xs font-medium text-purple-700">Image</span>
+                  {part.image_url.detail && (
+                    <span className="text-xs text-gray-500">({part.image_url.detail})</span>
+                  )}
+                </div>
+                {isDataUrl ? (
+                  <img
+                    src={part.image_url.url}
+                    alt="Embedded image"
+                    className="max-w-full max-h-64 rounded border border-gray-200"
+                  />
+                ) : (
+                  <a
+                    href={part.image_url.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-blue-600 hover:underline break-all"
+                  >
+                    {part.image_url.url.length > 100
+                      ? part.image_url.url.substring(0, 100) + '...'
+                      : part.image_url.url}
+                  </a>
+                )}
+              </div>
+            );
+          }
+
+          if (part.type === 'input_audio') {
+            const audioSrc = `data:audio/${part.input_audio.format};base64,${part.input_audio.data}`;
+            const dataSizeKB = Math.round((part.input_audio.data.length * 3) / 4 / 1024);
+            return (
+              <div key={index} className={`${bubbleClass}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                  </svg>
+                  <span className="text-xs font-medium text-indigo-700">Audio Input</span>
+                  <span className="text-xs text-gray-500">
+                    ({part.input_audio.format.toUpperCase()}, ~{dataSizeKB} KB)
+                  </span>
+                </div>
+                <audio controls className="w-full max-w-md">
+                  <source src={audioSrc} type={`audio/${part.input_audio.format}`} />
+                  Your browser does not support the audio element.
+                </audio>
+              </div>
+            );
+          }
+
+          // Unknown content type - show as JSON
+          return (
+            <div key={index} className={`${bubbleClass} font-mono text-xs`}>
+              <span className="text-gray-500">Unknown content type:</span>
+              <pre className="mt-1 overflow-x-auto">{JSON.stringify(part, null, 2)}</pre>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  return null;
+}
+
 // Conversation View with Tool-Call Support
 function ConversationView({ aiRequest }: { aiRequest: AiRequest }) {
   // Try to parse the new messages format first, fall back to legacy
@@ -760,6 +882,11 @@ function ConversationView({ aiRequest }: { aiRequest: AiRequest }) {
                       {msg.imageCount} image{msg.imageCount !== 1 ? 's' : ''}
                     </span>
                   )}
+                  {msg.hasAudio && msg.audioCount && msg.audioCount > 0 && (
+                    <span className="px-1.5 py-0.5 text-xs bg-indigo-100 text-indigo-700 rounded">
+                      {msg.audioCount} audio
+                    </span>
+                  )}
                   {msg.role === 'tool' && msg.toolName && (
                     <code className="px-1.5 py-0.5 text-xs bg-amber-200 text-amber-800 rounded font-mono">
                       {msg.toolName}
@@ -767,11 +894,9 @@ function ConversationView({ aiRequest }: { aiRequest: AiRequest }) {
                   )}
                 </div>
 
-                {/* Content */}
+                {/* Content - handles both string and multimodal array */}
                 {msg.content && (
-                  <div className={`${styles.bubble} rounded-lg p-3 text-sm whitespace-pre-wrap break-words`}>
-                    {msg.content}
-                  </div>
+                  <MessageContent content={msg.content} bubbleClass={`${styles.bubble} rounded-lg p-3 text-sm`} />
                 )}
 
                 {/* Tool Calls for Assistant messages */}

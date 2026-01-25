@@ -44,6 +44,8 @@ export interface ConversationMessage {
   // For multimodal content
   hasImages?: boolean;
   imageCount?: number;
+  hasAudio?: boolean;
+  audioCount?: number;
 }
 
 export interface ParsedAiRequest {
@@ -160,13 +162,15 @@ export function parseAiRequest(body: any, path: string, targetUrl: string, heade
         });
       } else if (role === 'user') {
         const content = extractContent(msg.content);
-        const imageInfo = extractImageInfo(msg.content);
+        const mediaInfo = extractMediaInfo(msg.content);
         if (content) userMessages.push(content);
         messages.push({
           role: 'user',
           content,
-          hasImages: imageInfo.hasImages,
-          imageCount: imageInfo.imageCount,
+          hasImages: mediaInfo.hasImages,
+          imageCount: mediaInfo.imageCount,
+          hasAudio: mediaInfo.hasAudio,
+          audioCount: mediaInfo.audioCount,
         });
       } else if (role === 'assistant') {
         const content = extractContent(msg.content);
@@ -280,20 +284,31 @@ function parseToolCalls(toolCallsOrFunctionCall: any): ToolCall[] | null {
 }
 
 /**
- * Extract image information from multimodal content
+ * Extract media information (images, audio) from multimodal content
  */
-function extractImageInfo(content: any): { hasImages: boolean; imageCount: number } {
+function extractMediaInfo(content: any): {
+  hasImages: boolean;
+  imageCount: number;
+  hasAudio: boolean;
+  audioCount: number;
+} {
   if (!Array.isArray(content)) {
-    return { hasImages: false, imageCount: 0 };
+    return { hasImages: false, imageCount: 0, hasAudio: false, audioCount: 0 };
   }
 
   const imageCount = content.filter(
     (part: any) => part.type === 'image_url' || part.type === 'image'
   ).length;
 
+  const audioCount = content.filter(
+    (part: any) => part.type === 'input_audio' || part.type === 'audio'
+  ).length;
+
   return {
     hasImages: imageCount > 0,
     imageCount,
+    hasAudio: audioCount > 0,
+    audioCount,
   };
 }
 
