@@ -10,8 +10,7 @@ on:
       - '.gitignore'
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  REGISTRY: registry.prozesshub.eu
 
 jobs:
   version:
@@ -38,7 +37,6 @@ jobs:
     if: always() && !cancelled()
     permissions:
       contents: read
-      packages: write
 
     steps:
       - uses: actions/checkout@v4
@@ -57,7 +55,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ steps.registry.outputs.image_name }}
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=raw,value=${{ needs.version.outputs.version }},enable=${{ github.ref == 'refs/heads/main' && needs.version.outputs.version != '' }}
