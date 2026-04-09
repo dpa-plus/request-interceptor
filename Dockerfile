@@ -35,8 +35,8 @@ FROM node:20-alpine AS production
 
 WORKDIR /app
 
-# Install runtime dependencies for better-sqlite3
-RUN apk add --no-cache python3 make g++ gcc
+# Install runtime dependencies for better-sqlite3 + sqlite3 CLI for debugging
+RUN apk add --no-cache python3 make g++ gcc sqlite
 
 # Copy package files
 COPY package*.json ./
