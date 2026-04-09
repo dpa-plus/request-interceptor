@@ -76,29 +76,45 @@ export async function fetchOpenRouterGeneration(
 /**
  * Enrich an AiRequest record with OpenRouter generation data.
  * This runs in the background after the response has been sent.
+ *
+ * OpenRouter's generation API is lazy — data may not be available immediately.
+ * We retry with increasing delays (10s, 20s, 30s) matching the SMA backend strategy.
  */
 export async function enrichAiRequestWithOpenRouter(
   aiRequestId: string,
   generationId: string,
   authHeader: string
 ): Promise<void> {
-  try {
-    const generationData = await fetchOpenRouterGeneration(generationId, authHeader);
+  const retryDelays = [10_000, 20_000, 30_000];
+  let generationData: OpenRouterGenerationData | null = null;
 
-    if (!generationData) {
-      console.warn(`Failed to fetch OpenRouter generation data for ${generationId}`);
-      return;
+  for (let attempt = 0; attempt <= retryDelays.length; attempt++) {
+    // Wait before fetching — initial 10s delay, then retries at 20s, 30s
+    const delay = attempt === 0 ? 10_000 : retryDelays[attempt - 1];
+    await new Promise(resolve => setTimeout(resolve, delay));
+
+    generationData = await fetchOpenRouterGeneration(generationId, authHeader);
+
+    if (generationData && generationData.total_cost !== undefined) {
+      break;
     }
 
-    // Update the AiRequest with enriched data (using 'as any' for new fields not yet in Prisma types)
+    if (attempt < retryDelays.length) {
+      console.log(`OpenRouter generation data not yet available for ${generationId}, retrying in ${retryDelays[attempt] / 1000}s (attempt ${attempt + 1}/${retryDelays.length})`);
+    }
+  }
+
+  if (!generationData) {
+    console.warn(`Failed to fetch OpenRouter generation data for ${generationId} after ${retryDelays.length + 1} attempts`);
+    return;
+  }
+
+  try {
     await prisma.aiRequest.update({
       where: { id: aiRequestId },
       data: {
-        // Mark as enriched
         openrouterEnriched: true,
         openrouterEnrichedAt: new Date(),
-
-        // OpenRouter-specific data
         openrouterGenerationId: generationData.id,
         openrouterProviderName: generationData.provider_name,
         openrouterUpstreamId: generationData.upstream_id,
@@ -114,25 +130,18 @@ export async function enrichAiRequestWithOpenRouter(
         openrouterFinishReason: generationData.finish_reason || generationData.native_finish_reason,
         openrouterIsByok: generationData.is_byok,
         openrouterRawResponse: JSON.stringify(generationData),
-
-        // Update cost with actual OpenRouter cost (convert USD to micro-dollars)
         totalCostMicros: Math.round(generationData.total_cost * 1_000_000),
-
-        // Update token counts if we have native values
         promptTokens: generationData.native_tokens_prompt ?? generationData.tokens_prompt,
         completionTokens: generationData.native_tokens_completion ?? generationData.tokens_completion,
         totalTokens:
           (generationData.native_tokens_prompt ?? generationData.tokens_prompt ?? 0) +
           (generationData.native_tokens_completion ?? generationData.tokens_completion ?? 0),
-
-        // Update model if different
         model: generationData.model,
       } as any,
     });
 
     console.log(`Enriched AiRequest ${aiRequestId} with OpenRouter data (generation: ${generationId}, provider: ${generationData.provider_name}, cost: $${generationData.total_cost})`);
 
-    // Emit socket event for OpenRouter enrichment
     emitOpenRouterEnriched({
       aiRequestId,
       openrouterProviderName: generationData.provider_name,
@@ -140,24 +149,20 @@ export async function enrichAiRequestWithOpenRouter(
       openrouterCacheDiscount: generationData.cache_discount,
     });
   } catch (error) {
-    console.error(`Error enriching AiRequest ${aiRequestId} with OpenRouter data:`, error);
+    console.error(`Error updating AiRequest ${aiRequestId} with OpenRouter data:`, error);
   }
 }
 
 /**
- * Schedule OpenRouter enrichment to run after a short delay.
- * This allows the OpenRouter API time to process the generation.
+ * Schedule OpenRouter enrichment in the background.
+ * The enrichment function handles its own retry delays internally.
  */
 export function scheduleOpenRouterEnrichment(
   aiRequestId: string,
   generationId: string,
-  authHeader: string,
-  delayMs: number = 1000
+  authHeader: string
 ): void {
-  // Don't await - this runs in the background
-  setTimeout(() => {
-    enrichAiRequestWithOpenRouter(aiRequestId, generationId, authHeader).catch(err => {
-      console.error('Background OpenRouter enrichment failed:', err);
-    });
-  }, delayMs);
+  enrichAiRequestWithOpenRouter(aiRequestId, generationId, authHeader).catch(err => {
+    console.error('Background OpenRouter enrichment failed:', err);
+  });
 }
