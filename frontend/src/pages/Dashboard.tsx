@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useSocket, RequestStartEvent, RequestCompleteEvent } from '../hooks/useSocket';
@@ -38,6 +38,18 @@ interface LogsResponse {
 }
 
 const LOGS_PER_PAGE = 50;
+const GROUP_TIME_WINDOW_MS = 5000; // Group requests within 5 seconds
+
+interface RequestGroup {
+  id: string;
+  hostname: string;
+  requests: RequestLog[];
+  methods: Set<string>;
+  startTime: string;
+  endTime: string;
+  hasErrors: boolean;
+  hasAi: boolean;
+}
 
 function Dashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -48,6 +60,7 @@ function Dashboard() {
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
   // Read filters from URL so they persist across navigation
@@ -55,6 +68,7 @@ function Dashboard() {
   const methodFilter = searchParams.get('method') || '';
   const statusFilter = searchParams.get('status') || '';
   const searchQuery = searchParams.get('q') || '';
+  const groupingEnabled = searchParams.get('group') === '1';
 
   // Helper to update URL params (preserves other params)
   const updateParam = useCallback((key: string, value: string) => {
@@ -71,11 +85,15 @@ function Dashboard() {
   const setStatusFilter = (val: string) => updateParam('status', val);
   const setSearchQuery = (val: string) => updateParam('q', val);
 
+  // Track last-viewed request for highlighting
+  const [lastViewedId, setLastViewedId] = useState<string | null>(() => {
+    return sessionStorage.getItem('dashboard-last-viewed');
+  });
+
   // Restore scroll position when returning to the dashboard
   useEffect(() => {
     const savedScroll = sessionStorage.getItem('dashboard-scroll');
     if (savedScroll) {
-      // Wait for content to render before scrolling
       const timer = setTimeout(() => {
         window.scrollTo(0, parseInt(savedScroll, 10));
         sessionStorage.removeItem('dashboard-scroll');
@@ -84,12 +102,32 @@ function Dashboard() {
     }
   }, []);
 
-  // Save scroll position when clicking a link (navigating away)
+  // Clear last-viewed highlight after a few seconds
+  useEffect(() => {
+    if (lastViewedId) {
+      const timer = setTimeout(() => {
+        setLastViewedId(null);
+        sessionStorage.removeItem('dashboard-last-viewed');
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [lastViewedId]);
+
+  // Keep the return URL in sessionStorage in sync with current params
+  // (so RequestDetail's back link always has the right URL)
+  useEffect(() => {
+    const params = searchParams.toString();
+    sessionStorage.setItem('dashboard-return-url', params ? `/?${params}` : '/');
+  }, [searchParams]);
+
+  // Save scroll position and last-viewed ID when clicking a request link
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       const link = (e.target as HTMLElement).closest('a');
       if (link && link.getAttribute('href')?.startsWith('/request/')) {
         sessionStorage.setItem('dashboard-scroll', String(window.scrollY));
+        const match = link.getAttribute('href')?.match(/\/request\/(.+)/);
+        if (match) sessionStorage.setItem('dashboard-last-viewed', match[1]);
       }
     };
     document.addEventListener('click', handleClick);
@@ -283,6 +321,63 @@ function Dashboard() {
     });
   }, [logs, statusFilter, searchQuery]);
 
+  // Group filtered logs by target host + time window
+  const groupedLogs = useMemo((): RequestGroup[] => {
+    if (!groupingEnabled || filteredLogs.length === 0) return [];
+
+    const groups: RequestGroup[] = [];
+    let currentGroup: RequestGroup | null = null;
+
+    for (const log of filteredLogs) {
+      // Extract hostname from targetUrl
+      let hostname = 'unknown';
+      try {
+        hostname = new URL(log.targetUrl).hostname;
+      } catch {
+        hostname = log.targetUrl || 'unknown';
+      }
+
+      const logTime = new Date(log.createdAt).getTime();
+
+      // Check if this log belongs to the current group
+      if (
+        currentGroup &&
+        currentGroup.hostname === hostname &&
+        Math.abs(logTime - new Date(currentGroup.endTime).getTime()) <= GROUP_TIME_WINDOW_MS
+      ) {
+        currentGroup.requests.push(log);
+        currentGroup.methods.add(log.method);
+        currentGroup.endTime = log.createdAt;
+        if (log.error || (log.statusCode && log.statusCode >= 400)) currentGroup.hasErrors = true;
+        if (log.isAiRequest) currentGroup.hasAi = true;
+      } else {
+        // Start a new group
+        currentGroup = {
+          id: log.id,
+          hostname,
+          requests: [log],
+          methods: new Set([log.method]),
+          startTime: log.createdAt,
+          endTime: log.createdAt,
+          hasErrors: !!(log.error || (log.statusCode && log.statusCode >= 400)),
+          hasAi: log.isAiRequest,
+        };
+        groups.push(currentGroup);
+      }
+    }
+
+    return groups;
+  }, [filteredLogs, groupingEnabled]);
+
+  const toggleGroup = (groupId: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
+  };
+
   const getMethodColor = (method: string) => {
     const colors: Record<string, string> = {
       GET: 'bg-green-100 text-green-800',
@@ -342,7 +437,9 @@ function Dashboard() {
             </span>
           </div>
           <p className="text-sm text-gray-500 mt-1">
-            {filteredLogs.length === logs.length ? (
+            {groupingEnabled && groupedLogs.length > 0 ? (
+              <>{groupedLogs.length} groups ({filteredLogs.length.toLocaleString()} requests)</>
+            ) : filteredLogs.length === logs.length ? (
               <>{total.toLocaleString()} total requests</>
             ) : (
               <>{filteredLogs.length.toLocaleString()} of {logs.length.toLocaleString()} requests (filtered)</>
@@ -438,6 +535,22 @@ function Dashboard() {
             <option value="5xx">5xx Server Error</option>
           </select>
 
+          {/* Group toggle */}
+          <button
+            onClick={() => updateParam('group', groupingEnabled ? '' : '1')}
+            className={`px-3 py-2 border rounded-md text-sm font-medium flex items-center gap-1.5 ${
+              groupingEnabled
+                ? 'bg-blue-50 border-blue-300 text-blue-700'
+                : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+            }`}
+            title="Group related requests by target host"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            </svg>
+            Group
+          </button>
+
           {/* Clear filters */}
           {(searchQuery || filter !== 'all' || methodFilter || statusFilter) && (
             <button
@@ -530,13 +643,151 @@ function Dashboard() {
                     )}
                   </td>
                 </tr>
+              ) : groupingEnabled && groupedLogs.length > 0 ? (
+                /* ---- Grouped view ---- */
+                groupedLogs.map((group) => {
+                  const isExpanded = expandedGroups.has(group.id);
+                  const isSingle = group.requests.length === 1;
+
+                  // Single-request groups render as normal rows
+                  if (isSingle) {
+                    const log = group.requests[0];
+                    return (
+                      <tr
+                        key={log.id}
+                        className={`relative hover:bg-gray-50 transition-colors ${
+                          log.statusCode === null ? 'animate-pulse bg-blue-50' : ''
+                        }`}
+                      >
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <span className={`relative z-10 px-2 py-1 text-xs font-bold rounded ${getMethodColor(log.method)}`}>
+                            {log.method}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate font-mono">
+                          <Link to={`/request/${log.id}`} className="text-blue-600 hover:text-blue-800 hover:underline before:absolute before:inset-0 focus:outline-none" title={log.path}>
+                            {log.path}
+                          </Link>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-500 max-w-xs truncate">{log.targetUrl || '-'}</td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <span className={`text-sm font-bold ${getStatusColor(log.statusCode)}`}>{log.statusCode || '...'}</span>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm">{log.responseTime ? `${log.responseTime}ms` : '-'}</td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {log.isAiRequest ? <span className="px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">AI</span> : <span className="text-gray-300">-</span>}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{new Date(log.createdAt).toLocaleTimeString()}</td>
+                      </tr>
+                    );
+                  }
+
+                  // Multi-request groups: collapsible header + child rows
+                  const methods = Array.from(group.methods);
+                  return (
+                    <React.Fragment key={group.id}>
+                      {/* Group header */}
+                      <tr
+                        onClick={() => toggleGroup(group.id)}
+                        className="bg-gray-50 hover:bg-gray-100 cursor-pointer border-l-4 border-blue-400"
+                      >
+                        <td className="px-4 py-2.5 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <svg className={`w-4 h-4 text-gray-500 transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                            <div className="flex gap-1">
+                              {methods.map((m) => (
+                                <span key={m} className={`px-1.5 py-0.5 text-xs font-bold rounded ${getMethodColor(m)}`}>{m}</span>
+                              ))}
+                            </div>
+                          </div>
+                        </td>
+                        <td colSpan={2} className="px-4 py-2.5 text-sm">
+                          <span className="font-medium text-gray-700">{group.hostname}</span>
+                          <span className="ml-2 text-xs text-gray-400">
+                            {group.requests.length} requests
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 whitespace-nowrap">
+                          {group.hasErrors && (
+                            <span className="text-xs text-red-500 font-medium">has errors</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5 whitespace-nowrap text-sm text-gray-500">-</td>
+                        <td className="px-4 py-2.5 whitespace-nowrap">
+                          {group.hasAi && (
+                            <span className="px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">AI</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5 whitespace-nowrap text-sm text-gray-500">
+                          {new Date(group.startTime).toLocaleTimeString()}
+                        </td>
+                      </tr>
+
+                      {/* Expanded child rows */}
+                      {isExpanded && group.requests.map((log) => (
+                        <tr
+                          key={log.id}
+                          className={`relative hover:bg-blue-50 transition-colors border-l-4 border-blue-200 ${
+                            log.statusCode === null ? 'animate-pulse bg-blue-50' : ''
+                          } ${lastViewedId === log.id ? 'bg-yellow-50 ring-1 ring-yellow-200' : ''}`}
+                        >
+                          <td className="pl-10 pr-4 py-2.5 whitespace-nowrap">
+                            <span className={`relative z-10 px-2 py-1 text-xs font-bold rounded ${getMethodColor(log.method)}`}>
+                              {log.method}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5 text-sm text-gray-900 max-w-xs truncate font-mono">
+                            <Link to={`/request/${log.id}`} className="text-blue-600 hover:text-blue-800 hover:underline before:absolute before:inset-0 focus:outline-none" title={log.path}>
+                              {log.path}
+                            </Link>
+                          </td>
+                          <td className="px-4 py-2.5 text-sm text-gray-500 max-w-xs truncate">{log.targetUrl || '-'}</td>
+                          <td className="px-4 py-2.5 whitespace-nowrap">
+                            {log.statusCode === null ? (
+                              <span className="text-sm text-blue-600">Pending</span>
+                            ) : (
+                              <span className={`text-sm font-bold ${getStatusColor(log.statusCode)}`}>{log.statusCode}</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2.5 whitespace-nowrap text-sm">
+                            {log.responseTime ? (
+                              <span className={`font-medium ${
+                                log.responseTime > 2000 ? 'text-red-600' :
+                                log.responseTime > 1000 ? 'text-orange-600' :
+                                log.responseTime > 500 ? 'text-yellow-600' :
+                                'text-green-600'
+                              }`}>{log.responseTime}ms</span>
+                            ) : '-'}
+                          </td>
+                          <td className="px-4 py-2.5 whitespace-nowrap">
+                            {log.isAiRequest && log.aiRequest ? (
+                              <span className="px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 truncate max-w-[150px]">
+                                {log.aiRequest.model || log.aiRequest.provider || 'AI'}
+                              </span>
+                            ) : log.isAiRequest ? (
+                              <span className="px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">AI</span>
+                            ) : (
+                              <span className="text-gray-300">-</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2.5 whitespace-nowrap text-sm text-gray-500">
+                            {new Date(log.createdAt).toLocaleTimeString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </React.Fragment>
+                  );
+                })
               ) : (
+                /* ---- Flat view (no grouping) ---- */
                 filteredLogs.map((log) => (
                   <tr
                     key={log.id}
                     className={`relative hover:bg-gray-50 transition-colors ${
                       log.statusCode === null ? 'animate-pulse bg-blue-50' : ''
-                    }`}
+                    } ${lastViewedId === log.id ? 'bg-yellow-50 ring-1 ring-yellow-200' : ''}`}
                   >
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span

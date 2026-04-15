@@ -126,6 +126,7 @@ interface RequestLog {
 
 function RequestDetail() {
   const { id } = useParams<{ id: string }>();
+  const backUrl = sessionStorage.getItem('dashboard-return-url') || '/';
 
   const [log, setLog] = useState<RequestLog | null>(null);
   const [loading, setLoading] = useState(true);
@@ -250,7 +251,7 @@ function RequestDetail() {
         </div>
         <div className="text-red-600 mb-4 font-medium">{error || 'Request not found'}</div>
         <Link
-          to="/"
+          to={backUrl}
           className="text-blue-600 hover:text-blue-800 font-medium"
         >
           ← Back to Dashboard
@@ -267,7 +268,7 @@ function RequestDetail() {
           {/* Left: Back + Method + Status + URL */}
           <div className="flex items-center gap-3 min-w-0 flex-1">
             <Link
-              to="/"
+              to={backUrl}
               className="p-1 text-gray-400 hover:text-gray-600 rounded hover:bg-gray-100 flex-shrink-0"
               title="Back to request list"
             >
