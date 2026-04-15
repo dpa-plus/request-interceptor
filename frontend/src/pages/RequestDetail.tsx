@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { CopyButton } from '../components/CopyButton';
 import { SmartBodyViewer } from '../components/SmartBodyViewer';
@@ -126,7 +126,7 @@ interface RequestLog {
 
 function RequestDetail() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+
   const [log, setLog] = useState<RequestLog | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -249,12 +249,12 @@ function RequestDetail() {
           </svg>
         </div>
         <div className="text-red-600 mb-4 font-medium">{error || 'Request not found'}</div>
-        <button
-          onClick={() => navigate('/')}
+        <Link
+          to="/"
           className="text-blue-600 hover:text-blue-800 font-medium"
         >
           ← Back to Dashboard
-        </button>
+        </Link>
       </div>
     );
   }
@@ -266,15 +266,15 @@ function RequestDetail() {
         <div className="flex items-center justify-between gap-4">
           {/* Left: Back + Method + Status + URL */}
           <div className="flex items-center gap-3 min-w-0 flex-1">
-            <button
-              onClick={() => navigate(-1)}
+            <Link
+              to="/"
               className="p-1 text-gray-400 hover:text-gray-600 rounded hover:bg-gray-100 flex-shrink-0"
-              title="Go back"
+              title="Back to request list"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
-            </button>
+            </Link>
             <span className={`px-2 py-0.5 text-xs font-bold rounded border flex-shrink-0 ${getMethodColor(log.method)}`}>
               {log.method}
             </span>

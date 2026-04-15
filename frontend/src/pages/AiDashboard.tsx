@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
 interface Stats {
   totalRequests: number;
@@ -65,7 +65,6 @@ interface AiRequest {
 }
 
 function AiDashboard() {
-  const navigate = useNavigate();
   const [stats, setStats] = useState<Stats | null>(null);
   const [aiRequests, setAiRequests] = useState<AiRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -395,11 +394,15 @@ function AiDashboard() {
                 aiRequests.map((req) => (
                   <tr
                     key={req.id}
-                    onClick={() => navigate(`/request/${req.requestLogId}`)}
-                    className="hover:bg-gray-50 cursor-pointer"
+                    className="relative hover:bg-gray-50"
                   >
                     <td className="px-4 py-3 whitespace-nowrap">
-                      <div className="flex flex-col gap-1">
+                      <Link
+                        to={`/request/${req.requestLogId}`}
+                        className="absolute inset-0 z-0"
+                        aria-label={`View request for ${req.model || req.provider}`}
+                      />
+                      <div className="relative z-10 flex flex-col gap-1">
                         <span className="px-2 py-1 text-xs font-medium rounded bg-purple-100 text-purple-800 capitalize">
                           {req.provider}
                         </span>

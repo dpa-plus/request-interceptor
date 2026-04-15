@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useSocket, RequestStartEvent, RequestCompleteEvent } from '../hooks/useSocket';
 
@@ -40,19 +40,61 @@ interface LogsResponse {
 const LOGS_PER_PAGE = 50;
 
 function Dashboard() {
-  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [logs, setLogs] = useState<RequestLog[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'all' | 'ai' | 'regular'>('all');
-  const [methodFilter, setMethodFilter] = useState<string>('');
-  const [statusFilter, setStatusFilter] = useState<string>('');
-  const [searchQuery, setSearchQuery] = useState<string>('');
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  // Read filters from URL so they persist across navigation
+  const filter = (searchParams.get('filter') as 'all' | 'ai' | 'regular') || 'all';
+  const methodFilter = searchParams.get('method') || '';
+  const statusFilter = searchParams.get('status') || '';
+  const searchQuery = searchParams.get('q') || '';
+
+  // Helper to update URL params (preserves other params)
+  const updateParam = useCallback((key: string, value: string) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value && value !== 'all') next.set(key, value);
+      else next.delete(key);
+      return next;
+    });
+  }, [setSearchParams]);
+
+  const setFilter = (val: string) => updateParam('filter', val);
+  const setMethodFilter = (val: string) => updateParam('method', val);
+  const setStatusFilter = (val: string) => updateParam('status', val);
+  const setSearchQuery = (val: string) => updateParam('q', val);
+
+  // Restore scroll position when returning to the dashboard
+  useEffect(() => {
+    const savedScroll = sessionStorage.getItem('dashboard-scroll');
+    if (savedScroll) {
+      // Wait for content to render before scrolling
+      const timer = setTimeout(() => {
+        window.scrollTo(0, parseInt(savedScroll, 10));
+        sessionStorage.removeItem('dashboard-scroll');
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  // Save scroll position when clicking a link (navigating away)
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      const link = (e.target as HTMLElement).closest('a');
+      if (link && link.getAttribute('href')?.startsWith('/request/')) {
+        sessionStorage.setItem('dashboard-scroll', String(window.scrollY));
+      }
+    };
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, []);
 
   // Handle incoming request from Socket.IO
   const handleRequestStart = useCallback((event: RequestStartEvent) => {
@@ -399,12 +441,7 @@ function Dashboard() {
           {/* Clear filters */}
           {(searchQuery || filter !== 'all' || methodFilter || statusFilter) && (
             <button
-              onClick={() => {
-                setSearchQuery('');
-                setFilter('all');
-                setMethodFilter('');
-                setStatusFilter('');
-              }}
+              onClick={() => setSearchParams(new URLSearchParams())}
               className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900"
             >
               Clear filters
@@ -457,22 +494,39 @@ function Dashboard() {
               {filteredLogs.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-6 py-12 text-center">
-                    <svg className="w-12 h-12 mx-auto text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
-                    <p className="text-gray-500">
-                      {logs.length === 0 ? 'No requests logged yet' : 'No requests match your filters'}
-                    </p>
-                    {(searchQuery || statusFilter) && (
-                      <button
-                        onClick={() => {
-                          setSearchQuery('');
-                          setStatusFilter('');
-                        }}
-                        className="mt-2 text-blue-600 hover:text-blue-800 text-sm"
-                      >
-                        Clear filters
-                      </button>
+                    {logs.length === 0 ? (
+                      <>
+                        <svg className="w-12 h-12 mx-auto text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        <p className="text-gray-700 font-medium mb-2">No requests logged yet</p>
+                        <p className="text-gray-500 text-sm mb-4 max-w-md mx-auto">
+                          Send HTTP requests through the proxy to see them here.
+                          Point your app or tools at port 3101, or use a target URL:
+                        </p>
+                        <div className="bg-gray-50 rounded-lg p-3 max-w-lg mx-auto text-left">
+                          <p className="text-xs font-medium text-gray-500 mb-2">Quick test with curl:</p>
+                          <code className="text-xs text-gray-700 font-mono block whitespace-pre-wrap">
+                            curl http://localhost:3101/get?__target=https://httpbin.org
+                          </code>
+                        </div>
+                        <p className="text-xs text-gray-400 mt-3">
+                          Or run: <code className="bg-gray-100 px-1 rounded">bash scripts/seed-test-data.sh</code> to generate sample data
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-12 h-12 mx-auto text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        <p className="text-gray-500">No requests match your filters</p>
+                        <button
+                          onClick={() => setSearchParams(new URLSearchParams())}
+                          className="mt-2 text-blue-600 hover:text-blue-800 text-sm"
+                        >
+                          Clear all filters
+                        </button>
+                      </>
                     )}
                   </td>
                 </tr>
@@ -480,20 +534,25 @@ function Dashboard() {
                 filteredLogs.map((log) => (
                   <tr
                     key={log.id}
-                    onClick={() => navigate(`/request/${log.id}`)}
-                    className={`hover:bg-gray-50 cursor-pointer transition-colors ${
+                    className={`relative hover:bg-gray-50 transition-colors ${
                       log.statusCode === null ? 'animate-pulse bg-blue-50' : ''
                     }`}
                   >
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span
-                        className={`px-2 py-1 text-xs font-bold rounded ${getMethodColor(log.method)}`}
+                        className={`relative z-10 px-2 py-1 text-xs font-bold rounded ${getMethodColor(log.method)}`}
                       >
                         {log.method}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate font-mono">
-                      {log.path}
+                      <Link
+                        to={`/request/${log.id}`}
+                        className="text-blue-600 hover:text-blue-800 hover:underline before:absolute before:inset-0 focus:outline-none"
+                        title={log.path}
+                      >
+                        {log.path}
+                      </Link>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-500 max-w-xs truncate">
                       {log.targetUrl || '-'}
