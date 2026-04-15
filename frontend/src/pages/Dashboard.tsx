@@ -423,12 +423,12 @@ function Dashboard() {
       <div className="flex justify-between items-start mb-6">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gray-900">Request Logs</h1>
+            <h1 className="text-2xl font-bold text-gray-100">Request Logs</h1>
             <span
               className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
                 connected
                   ? 'bg-green-100 text-green-800'
-                  : 'bg-gray-100 text-gray-600'
+                  : 'bg-gray-100 text-gray-400'
               }`}
               title={connected ? 'Real-time updates active' : 'Not connected to server'}
             >
@@ -449,7 +449,7 @@ function Dashboard() {
         <div className="flex gap-2">
           <button
             onClick={() => fetchLogs()}
-            className="p-2 bg-white border border-gray-300 rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            className="p-2 bg-[#21262d] border border-[#30363d] rounded-md text-gray-400 hover:bg-[#30363d] hover:text-gray-200"
             title="Refresh"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -469,7 +469,7 @@ function Dashboard() {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-lg shadow mb-4 p-3">
+      <div className="bg-[#161b22] border border-[#30363d] rounded-lg mb-4 p-3">
         <div className="flex flex-wrap items-center gap-3">
           {/* Search */}
           <div className="flex-1 min-w-[200px]">
@@ -482,12 +482,12 @@ function Dashboard() {
                 placeholder="Search path, URL, model..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full pl-9 pr-3 py-2 border border-[#30363d] rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-[#1f6feb] focus:border-[#1f6feb] bg-[#0d1117] text-gray-200 placeholder-gray-500"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-400"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -501,7 +501,7 @@ function Dashboard() {
           <select
             value={filter}
             onChange={(e) => setFilter(e.target.value as 'all' | 'ai' | 'regular')}
-            className="px-3 py-2 border border-gray-300 rounded-md text-sm bg-white"
+            className="px-3 py-2 border border-[#30363d] rounded-md text-sm bg-[#0d1117] text-gray-300"
           >
             <option value="all">All Types</option>
             <option value="ai">AI Only</option>
@@ -512,7 +512,7 @@ function Dashboard() {
           <select
             value={methodFilter}
             onChange={(e) => setMethodFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-md text-sm bg-white"
+            className="px-3 py-2 border border-[#30363d] rounded-md text-sm bg-[#0d1117] text-gray-300"
           >
             <option value="">All Methods</option>
             <option value="GET">GET</option>
@@ -526,7 +526,7 @@ function Dashboard() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-md text-sm bg-white"
+            className="px-3 py-2 border border-[#30363d] rounded-md text-sm bg-[#0d1117] text-gray-300"
           >
             <option value="">All Status</option>
             <option value="2xx">2xx Success</option>
@@ -540,8 +540,8 @@ function Dashboard() {
             onClick={() => updateParam('group', groupingEnabled ? '' : '1')}
             className={`px-3 py-2 border rounded-md text-sm font-medium flex items-center gap-1.5 ${
               groupingEnabled
-                ? 'bg-blue-50 border-blue-300 text-blue-700'
-                : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                ? 'bg-[#1f6feb33] border-[#1f6feb] text-[#58a6ff]'
+                : 'border-gray-300 text-gray-400 hover:bg-[#1c2333]'
             }`}
             title="Group related requests by target host"
           >
@@ -555,7 +555,7 @@ function Dashboard() {
           {(searchQuery || filter !== 'all' || methodFilter || statusFilter) && (
             <button
               onClick={() => setSearchParams(new URLSearchParams())}
-              className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900"
+              className="px-3 py-2 text-sm text-gray-400 hover:text-gray-100"
             >
               Clear filters
             </button>
@@ -564,7 +564,7 @@ function Dashboard() {
       </div>
 
       {error && (
-        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-700 flex items-center justify-between">
+        <div className="mb-4 p-4 bg-red-900/20 border border-red-800/50 rounded-md text-red-700 flex items-center justify-between">
           <span>{error}</span>
           <button onClick={() => setError(null)} className="text-red-500 hover:text-red-700">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -575,35 +575,35 @@ function Dashboard() {
       )}
 
       {/* Table */}
-      <div className="bg-white shadow rounded-lg overflow-hidden">
+      <div className="bg-[#161b22] border border-[#30363d] rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-[#21262d]">
+            <thead className="bg-[#161b22]">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider select-none">
                   Method
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider select-none">
                   Path
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider select-none">
                   Target
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider select-none">
                   Status
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider select-none">
                   Time
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider select-none">
                   AI
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider select-none">
                   Timestamp
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-[#0d1117] divide-y divide-[#21262d]">
               {filteredLogs.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-6 py-12 text-center">
@@ -612,14 +612,14 @@ function Dashboard() {
                         <svg className="w-12 h-12 mx-auto text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
-                        <p className="text-gray-700 font-medium mb-2">No requests logged yet</p>
+                        <p className="text-gray-300 font-medium mb-2">No requests logged yet</p>
                         <p className="text-gray-500 text-sm mb-4 max-w-md mx-auto">
                           Send HTTP requests through the proxy to see them here.
                           Point your app or tools at port 3101, or use a target URL:
                         </p>
-                        <div className="bg-gray-50 rounded-lg p-3 max-w-lg mx-auto text-left">
+                        <div className="bg-[#161b22] rounded-lg p-3 max-w-lg mx-auto text-left">
                           <p className="text-xs font-medium text-gray-500 mb-2">Quick test with curl:</p>
-                          <code className="text-xs text-gray-700 font-mono block whitespace-pre-wrap">
+                          <code className="text-xs text-gray-300 font-mono block whitespace-pre-wrap">
                             curl http://localhost:3101/get?__target=https://httpbin.org
                           </code>
                         </div>
@@ -635,7 +635,7 @@ function Dashboard() {
                         <p className="text-gray-500">No requests match your filters</p>
                         <button
                           onClick={() => setSearchParams(new URLSearchParams())}
-                          className="mt-2 text-blue-600 hover:text-blue-800 text-sm"
+                          className="mt-2 text-[#58a6ff] hover:text-[#79c0ff] text-sm"
                         >
                           Clear all filters
                         </button>
@@ -655,7 +655,7 @@ function Dashboard() {
                     return (
                       <tr
                         key={log.id}
-                        className={`relative hover:bg-gray-50 transition-colors ${
+                        className={`relative hover:bg-[#1c2333] transition-colors ${
                           log.statusCode === null ? 'animate-pulse bg-blue-50' : ''
                         }`}
                       >
@@ -664,8 +664,8 @@ function Dashboard() {
                             {log.method}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate font-mono">
-                          <Link to={`/request/${log.id}`} className="text-blue-600 hover:text-blue-800 hover:underline before:absolute before:inset-0 focus:outline-none" title={log.path}>
+                        <td className="px-4 py-3 text-sm text-gray-100 max-w-xs truncate font-mono">
+                          <Link to={`/request/${log.id}`} className="text-[#58a6ff] hover:text-[#79c0ff] hover:underline before:absolute before:inset-0 focus:outline-none" title={log.path}>
                             {log.path}
                           </Link>
                         </td>
@@ -689,7 +689,7 @@ function Dashboard() {
                       {/* Group header */}
                       <tr
                         onClick={() => toggleGroup(group.id)}
-                        className="bg-gray-50 hover:bg-gray-100 cursor-pointer border-l-4 border-blue-400"
+                        className="bg-[#161b22] hover:bg-gray-100 cursor-pointer border-l-4 border-blue-400"
                       >
                         <td className="px-4 py-2.5 whitespace-nowrap">
                           <div className="flex items-center gap-2">
@@ -704,7 +704,7 @@ function Dashboard() {
                           </div>
                         </td>
                         <td colSpan={2} className="px-4 py-2.5 text-sm">
-                          <span className="font-medium text-gray-700">{group.hostname}</span>
+                          <span className="font-medium text-gray-300">{group.hostname}</span>
                           <span className="ml-2 text-xs text-gray-400">
                             {group.requests.length} requests
                           </span>
@@ -731,15 +731,15 @@ function Dashboard() {
                           key={log.id}
                           className={`relative hover:bg-blue-50 transition-colors border-l-4 border-blue-200 ${
                             log.statusCode === null ? 'animate-pulse bg-blue-50' : ''
-                          } ${lastViewedId === log.id ? 'bg-yellow-50 ring-1 ring-yellow-200' : ''}`}
+                          } ${lastViewedId === log.id ? 'bg-yellow-900/20 ring-1 ring-yellow-700/50' : ''}`}
                         >
                           <td className="pl-10 pr-4 py-2.5 whitespace-nowrap">
                             <span className={`relative z-10 px-2 py-1 text-xs font-bold rounded ${getMethodColor(log.method)}`}>
                               {log.method}
                             </span>
                           </td>
-                          <td className="px-4 py-2.5 text-sm text-gray-900 max-w-xs truncate font-mono">
-                            <Link to={`/request/${log.id}`} className="text-blue-600 hover:text-blue-800 hover:underline before:absolute before:inset-0 focus:outline-none" title={log.path}>
+                          <td className="px-4 py-2.5 text-sm text-gray-100 max-w-xs truncate font-mono">
+                            <Link to={`/request/${log.id}`} className="text-[#58a6ff] hover:text-[#79c0ff] hover:underline before:absolute before:inset-0 focus:outline-none" title={log.path}>
                               {log.path}
                             </Link>
                           </td>
@@ -785,9 +785,9 @@ function Dashboard() {
                 filteredLogs.map((log) => (
                   <tr
                     key={log.id}
-                    className={`relative hover:bg-gray-50 transition-colors ${
+                    className={`relative hover:bg-[#1c2333] transition-colors ${
                       log.statusCode === null ? 'animate-pulse bg-blue-50' : ''
-                    } ${lastViewedId === log.id ? 'bg-yellow-50 ring-1 ring-yellow-200' : ''}`}
+                    } ${lastViewedId === log.id ? 'bg-yellow-900/20 ring-1 ring-yellow-700/50' : ''}`}
                   >
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span
@@ -796,10 +796,10 @@ function Dashboard() {
                         {log.method}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate font-mono">
+                    <td className="px-4 py-3 text-sm text-gray-100 max-w-xs truncate font-mono">
                       <Link
                         to={`/request/${log.id}`}
-                        className="text-blue-600 hover:text-blue-800 hover:underline before:absolute before:inset-0 focus:outline-none"
+                        className="text-[#58a6ff] hover:text-[#79c0ff] hover:underline before:absolute before:inset-0 focus:outline-none"
                         title={log.path}
                       >
                         {log.path}
@@ -892,8 +892,8 @@ function Dashboard() {
 
       {/* Delete Confirmation Modal */}
       {deleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50">
+          <div className="bg-[#161b22] border border-[#30363d] rounded-lg max-w-md w-full p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
                 <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -901,7 +901,7 @@ function Dashboard() {
                 </svg>
               </div>
               <div>
-                <h3 className="text-lg font-medium text-gray-900">Clear All Logs</h3>
+                <h3 className="text-lg font-medium text-gray-100">Clear All Logs</h3>
                 <p className="text-sm text-gray-500">
                   Are you sure you want to delete all {total.toLocaleString()} logged requests? This cannot be undone.
                 </p>
@@ -910,7 +910,7 @@ function Dashboard() {
             <div className="flex gap-3 justify-end">
               <button
                 onClick={() => setDeleteConfirm(false)}
-                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="px-4 py-2 border border-[#30363d] rounded-md text-sm font-medium text-gray-300 hover:bg-[#1c2333]"
               >
                 Cancel
               </button>
