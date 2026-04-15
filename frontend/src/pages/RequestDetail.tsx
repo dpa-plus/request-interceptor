@@ -205,7 +205,7 @@ function RequestDetail() {
       PATCH: 'bg-orange-100 text-orange-800 border-orange-200',
       DELETE: 'bg-red-100 text-red-800 border-red-200',
     };
-    return colors[method] || 'bg-gray-100 text-gray-800 border-gray-200';
+    return colors[method] || 'bg-gray-100 text-gray-800 border-[#30363d]';
   };
 
   const getStatusColor = (status: number | null) => {
@@ -231,7 +231,7 @@ function RequestDetail() {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="flex items-center gap-3">
-          <svg className="animate-spin h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24">
+          <svg className="animate-spin h-5 w-5 text-[#58a6ff]" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
           </svg>
@@ -252,7 +252,7 @@ function RequestDetail() {
         <div className="text-red-600 mb-4 font-medium">{error || 'Request not found'}</div>
         <Link
           to={backUrl}
-          className="text-blue-600 hover:text-blue-800 font-medium"
+          className="text-[#58a6ff] hover:text-blue-800 font-medium"
         >
           ← Back to Dashboard
         </Link>
@@ -263,13 +263,13 @@ function RequestDetail() {
   return (
     <div className="space-y-4">
       {/* Compact Header with inline stats */}
-      <div className="bg-white rounded-lg shadow px-4 py-3">
+      <div className="bg-[#161b22] rounded-lg border border-[#30363d] px-4 py-3">
         <div className="flex items-center justify-between gap-4">
           {/* Left: Back + Method + Status + URL */}
           <div className="flex items-center gap-3 min-w-0 flex-1">
             <Link
               to={backUrl}
-              className="p-1 text-gray-400 hover:text-gray-600 rounded hover:bg-gray-100 flex-shrink-0"
+              className="p-1 text-gray-400 hover:text-gray-400 rounded hover:bg-gray-100 flex-shrink-0"
               title="Back to request list"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -292,7 +292,7 @@ function RequestDetail() {
                 Stream
               </span>
             )}
-            <span className="text-sm text-gray-600 font-mono truncate" title={log.url}>
+            <span className="text-sm text-gray-400 font-mono truncate" title={log.url}>
               {log.path}
             </span>
           </div>
@@ -349,14 +349,14 @@ function RequestDetail() {
       )}
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-[#30363d]">
         <nav className="-mb-px flex space-x-8">
           <button
             onClick={() => setActiveTab('request')}
             className={`py-3 px-1 border-b-2 text-sm font-medium transition-colors ${
               activeTab === 'request'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-blue-500 text-[#58a6ff]'
+                : 'border-transparent text-gray-500 hover:text-gray-300 hover:border-[#30363d]'
             }`}
           >
             <span className="flex items-center gap-2">
@@ -370,8 +370,8 @@ function RequestDetail() {
             onClick={() => setActiveTab('response')}
             className={`py-3 px-1 border-b-2 text-sm font-medium transition-colors ${
               activeTab === 'response'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-blue-500 text-[#58a6ff]'
+                : 'border-transparent text-gray-500 hover:text-gray-300 hover:border-[#30363d]'
             }`}
           >
             <span className="flex items-center gap-2">
@@ -387,7 +387,7 @@ function RequestDetail() {
               className={`py-3 px-1 border-b-2 text-sm font-medium transition-colors ${
                 activeTab === 'ai'
                   ? 'border-purple-500 text-purple-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  : 'border-transparent text-gray-500 hover:text-gray-300 hover:border-[#30363d]'
               }`}
             >
               <span className="flex items-center gap-2">
@@ -443,7 +443,7 @@ function RequestDetail() {
             )}
 
             {!log.responseHeaders && !log.responseBody && (
-              <div className="bg-white rounded-lg shadow p-8 text-center text-gray-500">
+              <div className="bg-[#161b22] rounded-lg border border-[#30363d] p-8 text-center text-gray-500">
                 <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                 </svg>
@@ -484,7 +484,7 @@ function OpenRouterPanel({ aiRequest }: { aiRequest: AiRequest }) {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow overflow-hidden">
+    <div className="bg-[#161b22] rounded-lg border border-[#30363d] overflow-hidden">
       <div className="p-3 space-y-3">
         {/* Compact header row with key info */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
@@ -492,7 +492,7 @@ function OpenRouterPanel({ aiRequest }: { aiRequest: AiRequest }) {
             <span className={`px-1.5 py-0.5 rounded font-medium ${
               aiRequest.openrouterFinishReason === 'stop' ? 'bg-green-100 text-green-700' :
               aiRequest.openrouterFinishReason === 'length' ? 'bg-yellow-100 text-yellow-700' :
-              'bg-gray-100 text-gray-700'
+              'bg-gray-100 text-gray-300'
             }`}>
               {aiRequest.openrouterFinishReason}
             </span>
@@ -530,15 +530,15 @@ function OpenRouterPanel({ aiRequest }: { aiRequest: AiRequest }) {
           )}
           {/* Latency */}
           {aiRequest.openrouterLatency && (
-            <div className="bg-gray-50 rounded px-2 py-1.5">
+            <div className="bg-[#0d1117] rounded px-2 py-1.5">
               <div className="text-[10px] text-gray-500 uppercase">Latency</div>
-              <div className="text-sm font-bold text-gray-900">{aiRequest.openrouterLatency}ms</div>
+              <div className="text-sm font-bold text-gray-100">{aiRequest.openrouterLatency}ms</div>
             </div>
           )}
           {/* Generation Time */}
           {aiRequest.openrouterGenerationTime && (
-            <div className="bg-blue-50 rounded px-2 py-1.5">
-              <div className="text-[10px] text-blue-600 uppercase">Generation</div>
+            <div className="bg-[#1f6feb33] rounded px-2 py-1.5">
+              <div className="text-[10px] text-[#58a6ff] uppercase">Generation</div>
               <div className="text-sm font-bold text-blue-900">{aiRequest.openrouterGenerationTime}ms</div>
             </div>
           )}
@@ -556,7 +556,7 @@ function OpenRouterPanel({ aiRequest }: { aiRequest: AiRequest }) {
                 />
               )}
               <div
-                className="bg-blue-500"
+                className="bg-[#1f6feb33]0"
                 style={{ width: `${(aiRequest.openrouterGenerationTime / aiRequest.openrouterLatency) * 100}%` }}
                 title={`Generation: ${aiRequest.openrouterGenerationTime}ms`}
               />
@@ -587,7 +587,7 @@ function OpenRouterPanel({ aiRequest }: { aiRequest: AiRequest }) {
         {/* Raw Response - Compact collapsible */}
         {aiRequest.openrouterRawResponse && (
           <details className="border-t pt-2">
-            <summary className="cursor-pointer text-xs text-gray-400 hover:text-gray-600">
+            <summary className="cursor-pointer text-xs text-gray-400 hover:text-gray-400">
               Raw Response
             </summary>
             <div className="mt-2">
@@ -641,14 +641,14 @@ function MessageContent({ content, bubbleClass }: { content: string | ContentPar
                   <img
                     src={part.image_url.url}
                     alt="Embedded image"
-                    className="max-w-full max-h-64 rounded border border-gray-200"
+                    className="max-w-full max-h-64 rounded border border-[#30363d]"
                   />
                 ) : (
                   <a
                     href={part.image_url.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xs text-blue-600 hover:underline break-all"
+                    className="text-xs text-[#58a6ff] hover:underline break-all"
                   >
                     {part.image_url.url.length > 100
                       ? part.image_url.url.substring(0, 100) + '...'
@@ -764,14 +764,14 @@ function ConversationView({ aiRequest }: { aiRequest: AiRequest }) {
     switch (role) {
       case 'system':
         return (
-          <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
         );
       case 'user':
         return (
-          <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 text-[#58a6ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
           </svg>
         );
@@ -804,8 +804,8 @@ function ConversationView({ aiRequest }: { aiRequest: AiRequest }) {
       case 'user':
         return {
           avatar: 'bg-blue-100',
-          label: 'text-blue-600',
-          bubble: 'bg-blue-50 border border-blue-100',
+          label: 'text-[#58a6ff]',
+          bubble: 'bg-[#1f6feb33] border border-blue-100',
         };
       case 'assistant':
         return {
@@ -830,7 +830,7 @@ function ConversationView({ aiRequest }: { aiRequest: AiRequest }) {
 
   if (messages.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow p-8 text-center text-gray-500">
+      <div className="bg-[#161b22] rounded-lg border border-[#30363d] p-8 text-center text-gray-500">
         <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
         </svg>
@@ -840,10 +840,10 @@ function ConversationView({ aiRequest }: { aiRequest: AiRequest }) {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow overflow-hidden">
-      <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
+    <div className="bg-[#161b22] rounded-lg border border-[#30363d] overflow-hidden">
+      <div className="px-4 py-3 border-b bg-[#0d1117] flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-medium text-gray-900">Conversation</h3>
+          <h3 className="text-sm font-medium text-gray-100">Conversation</h3>
           {aiRequest.hasToolCalls && (
             <span className="px-2 py-0.5 text-xs font-medium rounded bg-amber-100 text-amber-800 border border-amber-200">
               {aiRequest.toolCallCount || 0} Tool Call{(aiRequest.toolCallCount || 0) !== 1 ? 's' : ''}
@@ -964,7 +964,7 @@ function ToolCallBlock({ toolCall }: { toolCall: ToolCall }) {
         <div className="px-3 pb-3 border-t border-amber-200">
           <div className="mt-2">
             <div className="text-xs font-medium text-amber-700 mb-1">Arguments:</div>
-            <pre className="bg-white rounded p-2 text-xs overflow-x-auto border border-amber-200">
+            <pre className="bg-[#161b22] rounded p-2 text-xs overflow-x-auto border border-amber-200">
               {parsedArgs ? JSON.stringify(parsedArgs, null, 2) : toolCall.function.arguments}
             </pre>
           </div>
@@ -1095,8 +1095,8 @@ console.log(data);`;
   if (!aiRequest.fullRequest) return null;
 
   return (
-    <div className="bg-white rounded-lg shadow p-4">
-      <h3 className="text-sm font-medium text-gray-900 mb-3 flex items-center gap-2">
+    <div className="bg-[#161b22] rounded-lg border border-[#30363d] p-4">
+      <h3 className="text-sm font-medium text-gray-100 mb-3 flex items-center gap-2">
         <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
@@ -1111,7 +1111,7 @@ console.log(data);`;
           className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${
             copiedFormat === 'Python'
               ? 'bg-green-50 border-green-300 text-green-700'
-              : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+              : 'bg-[#161b22] border-[#30363d] text-gray-300 hover:bg-[#0d1117]'
           }`}
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -1124,7 +1124,7 @@ console.log(data);`;
           className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${
             copiedFormat === 'TypeScript'
               ? 'bg-green-50 border-green-300 text-green-700'
-              : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+              : 'bg-[#161b22] border-[#30363d] text-gray-300 hover:bg-[#0d1117]'
           }`}
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -1160,7 +1160,7 @@ function TimingWaterfall({ aiRequest }: { aiRequest: AiRequest }) {
   // For non-streaming requests, show simple timing
   if (!aiRequest.isStreaming) {
     return (
-      <div className="bg-white rounded-lg shadow p-3">
+      <div className="bg-[#161b22] rounded-lg border border-[#30363d] p-3">
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-medium text-gray-500 flex items-center gap-1">
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1169,9 +1169,9 @@ function TimingWaterfall({ aiRequest }: { aiRequest: AiRequest }) {
             Request Timing
           </h3>
           <div className="flex items-center gap-3 text-sm">
-            <span className="font-bold text-gray-900">{totalDuration}ms</span>
+            <span className="font-bold text-gray-100">{totalDuration}ms</span>
             {completionTokens > 0 && (
-              <span className="text-blue-600 font-medium">
+              <span className="text-[#58a6ff] font-medium">
                 {(completionTokens / (totalDuration / 1000)).toFixed(1)} tok/s
               </span>
             )}
@@ -1185,7 +1185,7 @@ function TimingWaterfall({ aiRequest }: { aiRequest: AiRequest }) {
   const ttftPercent = totalDuration > 0 ? (ttft / totalDuration) * 100 : 0;
 
   return (
-    <div className="bg-white rounded-lg shadow p-3">
+    <div className="bg-[#161b22] rounded-lg border border-[#30363d] p-3">
       {/* Header with inline stats */}
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-xs font-medium text-gray-500 flex items-center gap-1">
@@ -1196,7 +1196,7 @@ function TimingWaterfall({ aiRequest }: { aiRequest: AiRequest }) {
         </h3>
         <div className="flex items-center gap-3 text-xs">
           <span><span className="text-purple-600 font-medium">TTFT:</span> {ttft}ms</span>
-          <span><span className="text-blue-600 font-medium">Total:</span> {totalDuration}ms</span>
+          <span><span className="text-[#58a6ff] font-medium">Total:</span> {totalDuration}ms</span>
           {tokensPerSecond && <span className="text-green-600 font-bold">{tokensPerSecond} tok/s</span>}
         </div>
       </div>
@@ -1278,9 +1278,9 @@ function ContextWindowBar({ model, promptTokens, requestId }: { model: string | 
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow p-3">
+      <div className="bg-[#161b22] rounded-lg border border-[#30363d] p-3">
         <div className="flex items-center gap-2 text-xs text-gray-400">
-          <div className="animate-spin h-3 w-3 border border-gray-300 border-t-gray-600 rounded-full"></div>
+          <div className="animate-spin h-3 w-3 border border-[#30363d] border-t-gray-600 rounded-full"></div>
           Loading context info...
         </div>
       </div>
@@ -1301,7 +1301,7 @@ function ContextWindowBar({ model, promptTokens, requestId }: { model: string | 
   };
 
   return (
-    <div className="bg-white rounded-lg shadow p-3">
+    <div className="bg-[#161b22] rounded-lg border border-[#30363d] p-3">
       {/* Header with inline stats */}
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-xs font-medium text-gray-500 flex items-center gap-1">
@@ -1321,7 +1321,7 @@ function ContextWindowBar({ model, promptTokens, requestId }: { model: string | 
       <div className="relative">
         <div className="flex rounded-full overflow-hidden h-2 bg-gray-100">
           <div
-            className={`transition-all ${isCritical ? 'bg-red-500' : isWarning ? 'bg-yellow-500' : 'bg-blue-500'}`}
+            className={`transition-all ${isCritical ? 'bg-red-500' : isWarning ? 'bg-yellow-500' : 'bg-[#1f6feb33]0'}`}
             style={{ width: `${usagePercent}%` }}
           />
         </div>
@@ -1376,8 +1376,8 @@ function RequestParametersPanel({ fullRequest }: { fullRequest: string | null })
   const toolNames = params.tools?.map((t: any) => t.function?.name || t.name).filter(Boolean) || [];
 
   return (
-    <div className="bg-white rounded-lg shadow p-4">
-      <h3 className="text-sm font-medium text-gray-900 mb-3 flex items-center gap-2">
+    <div className="bg-[#161b22] rounded-lg border border-[#30363d] p-4">
+      <h3 className="text-sm font-medium text-gray-100 mb-3 flex items-center gap-2">
         <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
         </svg>
@@ -1385,13 +1385,13 @@ function RequestParametersPanel({ fullRequest }: { fullRequest: string | null })
       </h3>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {params.temperature !== undefined && (
-          <div className="bg-gray-50 rounded p-2">
+          <div className="bg-[#0d1117] rounded p-2">
             <div className="text-xs text-gray-500">Temperature</div>
-            <div className="font-medium text-gray-900 flex items-center gap-2">
+            <div className="font-medium text-gray-100 flex items-center gap-2">
               {params.temperature}
               <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
                 <div
-                  className={`h-full ${params.temperature <= 0.3 ? 'bg-blue-500' : params.temperature <= 0.7 ? 'bg-green-500' : params.temperature <= 1.2 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                  className={`h-full ${params.temperature <= 0.3 ? 'bg-[#1f6feb33]0' : params.temperature <= 0.7 ? 'bg-green-500' : params.temperature <= 1.2 ? 'bg-yellow-500' : 'bg-red-500'}`}
                   style={{ width: `${Math.min(params.temperature / 2 * 100, 100)}%` }}
                 />
               </div>
@@ -1399,74 +1399,74 @@ function RequestParametersPanel({ fullRequest }: { fullRequest: string | null })
           </div>
         )}
         {params.maxTokens !== undefined && (
-          <div className="bg-gray-50 rounded p-2">
+          <div className="bg-[#0d1117] rounded p-2">
             <div className="text-xs text-gray-500">Max Tokens</div>
-            <div className="font-medium text-gray-900">{params.maxTokens.toLocaleString()}</div>
+            <div className="font-medium text-gray-100">{params.maxTokens.toLocaleString()}</div>
           </div>
         )}
         {params.topP !== undefined && (
-          <div className="bg-gray-50 rounded p-2">
+          <div className="bg-[#0d1117] rounded p-2">
             <div className="text-xs text-gray-500">Top P</div>
-            <div className="font-medium text-gray-900">{params.topP}</div>
+            <div className="font-medium text-gray-100">{params.topP}</div>
           </div>
         )}
         {params.topK !== undefined && (
-          <div className="bg-gray-50 rounded p-2">
+          <div className="bg-[#0d1117] rounded p-2">
             <div className="text-xs text-gray-500">Top K</div>
-            <div className="font-medium text-gray-900">{params.topK}</div>
+            <div className="font-medium text-gray-100">{params.topK}</div>
           </div>
         )}
         {params.frequencyPenalty !== undefined && (
-          <div className="bg-gray-50 rounded p-2">
+          <div className="bg-[#0d1117] rounded p-2">
             <div className="text-xs text-gray-500">Frequency Penalty</div>
-            <div className="font-medium text-gray-900">{params.frequencyPenalty}</div>
+            <div className="font-medium text-gray-100">{params.frequencyPenalty}</div>
           </div>
         )}
         {params.presencePenalty !== undefined && (
-          <div className="bg-gray-50 rounded p-2">
+          <div className="bg-[#0d1117] rounded p-2">
             <div className="text-xs text-gray-500">Presence Penalty</div>
-            <div className="font-medium text-gray-900">{params.presencePenalty}</div>
+            <div className="font-medium text-gray-100">{params.presencePenalty}</div>
           </div>
         )}
         {params.seed !== undefined && (
-          <div className="bg-gray-50 rounded p-2">
+          <div className="bg-[#0d1117] rounded p-2">
             <div className="text-xs text-gray-500">Seed</div>
-            <div className="font-mono text-sm text-gray-900">{params.seed}</div>
+            <div className="font-mono text-sm text-gray-100">{params.seed}</div>
           </div>
         )}
         {params.n !== undefined && params.n > 1 && (
-          <div className="bg-gray-50 rounded p-2">
+          <div className="bg-[#0d1117] rounded p-2">
             <div className="text-xs text-gray-500">N (choices)</div>
-            <div className="font-medium text-gray-900">{params.n}</div>
+            <div className="font-medium text-gray-100">{params.n}</div>
           </div>
         )}
         {params.stream !== undefined && (
-          <div className="bg-gray-50 rounded p-2">
+          <div className="bg-[#0d1117] rounded p-2">
             <div className="text-xs text-gray-500">Streaming</div>
             <div className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
-              params.stream ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
+              params.stream ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-400'
             }`}>
               {params.stream ? 'Yes' : 'No'}
             </div>
           </div>
         )}
         {params.responseFormat && (
-          <div className="bg-gray-50 rounded p-2">
+          <div className="bg-[#0d1117] rounded p-2">
             <div className="text-xs text-gray-500">Response Format</div>
             <div className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
               params.responseFormat.type === 'json_object' ? 'bg-purple-100 text-purple-800' :
               params.responseFormat.type === 'json_schema' ? 'bg-indigo-100 text-indigo-800' :
-              'bg-gray-100 text-gray-600'
+              'bg-gray-100 text-gray-400'
             }`}>
               {params.responseFormat.type || 'text'}
             </div>
           </div>
         )}
         {params.logprobs !== undefined && (
-          <div className="bg-gray-50 rounded p-2">
+          <div className="bg-[#0d1117] rounded p-2">
             <div className="text-xs text-gray-500">Logprobs</div>
             <div className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
-              params.logprobs ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
+              params.logprobs ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-400'
             }`}>
               {params.logprobs ? 'Yes' : 'No'}
             </div>
@@ -1507,7 +1507,7 @@ function RequestParametersPanel({ fullRequest }: { fullRequest: string | null })
           <h4 className="text-xs font-medium text-gray-500 mb-2">Stop Sequences</h4>
           <div className="flex flex-wrap gap-2">
             {(Array.isArray(params.stop) ? params.stop : [params.stop]).map((s: string, i: number) => (
-              <code key={i} className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">
+              <code key={i} className="px-2 py-1 bg-gray-100 text-gray-300 text-xs rounded">
                 {JSON.stringify(s)}
               </code>
             ))}
@@ -1536,7 +1536,7 @@ function AiDetailsTab({
   return (
     <div className="space-y-4">
       {/* Compact AI Summary Header */}
-      <div className="bg-white rounded-lg shadow px-4 py-3">
+      <div className="bg-[#161b22] rounded-lg border border-[#30363d] px-4 py-3">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
           {/* Provider */}
           <div className="flex items-center gap-2">
@@ -1550,14 +1550,14 @@ function AiDetailsTab({
           {/* Model */}
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-gray-500">Model:</span>
-            <span className="text-sm font-medium text-gray-900 truncate max-w-[200px]" title={aiRequest.model || undefined}>
+            <span className="text-sm font-medium text-gray-100 truncate max-w-[200px]" title={aiRequest.model || undefined}>
               {aiRequest.model || '-'}
             </span>
           </div>
           {/* Tokens */}
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-gray-500">Tokens:</span>
-            <span className="text-sm font-medium text-gray-900">
+            <span className="text-sm font-medium text-gray-100">
               {totalTokens.toLocaleString()}
             </span>
             <span className="text-xs text-gray-400">
@@ -1575,7 +1575,7 @@ function AiDetailsTab({
           {aiRequest.totalDuration && (
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-gray-500">Duration:</span>
-              <span className="text-sm font-medium text-gray-900">{aiRequest.totalDuration}ms</span>
+              <span className="text-sm font-medium text-gray-100">{aiRequest.totalDuration}ms</span>
               {aiRequest.isStreaming && aiRequest.timeToFirstToken && (
                 <span className="text-xs text-gray-400">(TTFT: {aiRequest.timeToFirstToken}ms)</span>
               )}
@@ -1589,7 +1589,7 @@ function AiDetailsTab({
             <div className="flex items-center gap-3">
               <div className="flex-1 flex rounded-full overflow-hidden h-2 bg-gray-100">
                 <div
-                  className="bg-blue-500"
+                  className="bg-[#1f6feb33]0"
                   style={{ width: `${promptPercent}%` }}
                   title={`Prompt: ${promptTokens.toLocaleString()} (${promptPercent.toFixed(1)}%)`}
                 />
@@ -1600,7 +1600,7 @@ function AiDetailsTab({
               </div>
               <div className="flex items-center gap-2 text-xs text-gray-500">
                 <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-blue-500" />
+                  <span className="w-2 h-2 rounded-full bg-[#1f6feb33]0" />
                   Prompt: {promptTokens.toLocaleString()} ({promptPercent.toFixed(1)}%)
                 </span>
                 <span className="flex items-center gap-1">
@@ -1671,8 +1671,8 @@ function AiDetailsTab({
 
       {/* Full Request/Response JSON - Combined in one row */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <details className="bg-white rounded-lg shadow group">
-          <summary className="px-4 py-2 cursor-pointer text-sm font-medium text-gray-900 flex items-center justify-between hover:bg-gray-50">
+        <details className="bg-[#161b22] rounded-lg border border-[#30363d] group">
+          <summary className="px-4 py-2 cursor-pointer text-sm font-medium text-gray-100 flex items-center justify-between hover:bg-[#0d1117]">
             <span className="flex items-center gap-2">
               <svg className="w-4 h-4 text-gray-400 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -1688,8 +1688,8 @@ function AiDetailsTab({
           </div>
         </details>
 
-        <details className="bg-white rounded-lg shadow group">
-          <summary className="px-4 py-2 cursor-pointer text-sm font-medium text-gray-900 flex items-center justify-between hover:bg-gray-50">
+        <details className="bg-[#161b22] rounded-lg border border-[#30363d] group">
+          <summary className="px-4 py-2 cursor-pointer text-sm font-medium text-gray-100 flex items-center justify-between hover:bg-[#0d1117]">
             <span className="flex items-center gap-2">
               <svg className="w-4 h-4 text-gray-400 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />

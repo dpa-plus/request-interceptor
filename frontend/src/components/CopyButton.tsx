@@ -37,8 +37,8 @@ export function CopyButton({
     : 'px-3 py-1.5 text-sm';
 
   const variantClasses = variant === 'ghost'
-    ? 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
-    : 'bg-gray-100 hover:bg-gray-200 text-gray-700';
+    ? 'hover:bg-[#21262d] text-gray-400 hover:text-gray-200'
+    : 'bg-[#21262d] hover:bg-[#30363d] text-gray-300';
 
   return (
     <button
@@ -79,7 +79,7 @@ export function InlineCopyButton({ text }: { text: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="opacity-0 group-hover:opacity-100 ml-1 p-0.5 rounded hover:bg-gray-200 transition-opacity"
+      className="opacity-0 group-hover:opacity-100 ml-1 p-0.5 rounded hover:bg-[#30363d] transition-opacity"
       title="Copy value"
     >
       {copied ? (

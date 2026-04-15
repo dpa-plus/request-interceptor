@@ -43,8 +43,8 @@ export function SmartBodyViewer({
 
   if (!content) {
     return (
-      <div className="bg-white rounded-lg shadow p-4">
-        {title && <h3 className="text-sm font-medium text-gray-900 mb-2">{title}</h3>}
+      <div className="bg-[#161b22] rounded-lg border border-[#30363d] p-4">
+        {title && <h3 className="text-sm font-medium text-gray-200 mb-2">{title}</h3>}
         <div className="text-sm text-gray-500 italic">No content</div>
       </div>
     );
@@ -56,11 +56,11 @@ export function SmartBodyViewer({
   }
 
   return (
-    <div className="bg-white rounded-lg shadow overflow-hidden">
+    <div className="bg-[#161b22] rounded-lg border border-[#30363d] overflow-hidden">
       {/* Header */}
-      <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
+      <div className="px-4 py-3 border-b bg-[#0d1117] flex items-center justify-between">
         <div className="flex items-center gap-3">
-          {title && <h3 className="text-sm font-medium text-gray-900">{title}</h3>}
+          {title && <h3 className="text-sm font-medium text-gray-200">{title}</h3>}
           <span className={`px-2 py-0.5 text-xs font-medium rounded ${getContentTypeColor(contentType)}`}>
             {getContentTypeLabel(contentType)}
           </span>
@@ -79,8 +79,8 @@ export function SmartBodyViewer({
                 onClick={() => setViewMode(mode)}
                 className={`px-3 py-1 text-xs font-medium first:rounded-l-md last:rounded-r-md border ${
                   viewMode === mode
-                    ? 'bg-blue-50 border-blue-200 text-blue-700 z-10'
-                    : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                    ? 'bg-[#1f6feb33] border-[#1f6feb] text-[#58a6ff] z-10'
+                    : 'bg-[#161b22] border-[#30363d] text-gray-400 hover:bg-[#0d1117]'
                 } ${mode !== availableModes[0] ? '-ml-px' : ''}`}
               >
                 {mode === 'formatted' ? 'Formatted' : mode === 'raw' ? 'Raw' : 'Preview'}
@@ -90,7 +90,7 @@ export function SmartBodyViewer({
           {contentType === 'json' && viewMode === 'formatted' && (
             <button
               onClick={() => setExpanded(!expanded)}
-              className="px-2 py-1 text-xs font-medium rounded bg-gray-100 hover:bg-gray-200 text-gray-600"
+              className="px-2 py-1 text-xs font-medium rounded bg-gray-100 hover:bg-gray-200 text-gray-400"
             >
               {expanded ? 'Collapse All' : 'Expand All'}
             </button>
@@ -110,22 +110,22 @@ export function SmartBodyViewer({
                 ...defaultStyles,
                 container: 'json-view-container',
                 basicChildStyle: 'ml-4',
-                label: 'text-purple-700 font-medium',
-                nullValue: 'text-gray-400 italic',
-                undefinedValue: 'text-gray-400 italic',
-                numberValue: 'text-blue-600',
-                stringValue: 'text-green-700',
-                booleanValue: 'text-orange-600',
+                label: 'text-purple-400 font-medium',
+                nullValue: 'text-gray-500 italic',
+                undefinedValue: 'text-gray-500 italic',
+                numberValue: 'text-[#79c0ff]',
+                stringValue: 'text-[#a5d6ff]',
+                booleanValue: 'text-orange-400',
                 punctuation: 'text-gray-500',
-                collapseIcon: 'cursor-pointer text-gray-400 hover:text-gray-600 select-none',
-                expandIcon: 'cursor-pointer text-gray-400 hover:text-gray-600 select-none',
+                collapseIcon: 'cursor-pointer text-gray-400 hover:text-gray-400 select-none',
+                expandIcon: 'cursor-pointer text-gray-400 hover:text-gray-400 select-none',
               }}
             />
           </div>
         ) : viewMode === 'preview' && contentType === 'html' ? (
           <HtmlPreview html={content} />
         ) : (
-          <pre className="p-4 text-xs font-mono bg-gray-50 whitespace-pre-wrap break-all">
+          <pre className="p-4 text-xs font-mono bg-[#0d1117] whitespace-pre-wrap break-all">
             {contentType === 'json' ? formatJsonString(content) : content}
           </pre>
         )}
@@ -157,7 +157,7 @@ function HtmlPreview({ html }: { html: string }) {
       <iframe
         srcDoc={html}
         sandbox="allow-same-origin"
-        className="w-full h-96 border-0 bg-white"
+        className="w-full h-96 border-0 bg-[#161b22]"
         title="HTML Preview"
       />
     </div>
@@ -195,7 +195,7 @@ export function CompactJsonViewer({
   }, [data, maxLines]);
 
   return (
-    <pre className="text-xs font-mono bg-gray-50 p-2 rounded overflow-auto">
+    <pre className="text-xs font-mono bg-[#0d1117] p-2 rounded overflow-auto">
       {formatted}
     </pre>
   );

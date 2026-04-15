@@ -75,11 +75,11 @@ export function HeadersTable({ headers, title = 'Headers' }: HeadersTableProps) 
     SENSITIVE_HEADERS.includes(key.toLowerCase());
 
   return (
-    <div className="bg-white rounded-lg shadow overflow-hidden">
+    <div className="bg-[#161b22] rounded-lg border border-[#30363d] overflow-hidden">
       {/* Header */}
-      <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between gap-4">
+      <div className="px-4 py-3 border-b bg-[#0d1117] flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <h3 className="text-sm font-medium text-gray-900">{title}</h3>
+          <h3 className="text-sm font-medium text-gray-200">{title}</h3>
           <span className="text-xs text-gray-500">
             {headerEntries.length} {headerEntries.length === 1 ? 'header' : 'headers'}
           </span>
@@ -91,7 +91,7 @@ export function HeadersTable({ headers, title = 'Headers' }: HeadersTableProps) 
             placeholder="Filter headers..."
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className="px-2 py-1 text-xs border border-gray-200 rounded w-32 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="px-2 py-1 text-xs border border-[#30363d] rounded w-32 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
           {/* View mode toggle */}
           <div className="flex rounded-md shadow-sm">
@@ -99,8 +99,8 @@ export function HeadersTable({ headers, title = 'Headers' }: HeadersTableProps) 
               onClick={() => setViewMode('table')}
               className={`px-3 py-1 text-xs font-medium rounded-l-md border ${
                 viewMode === 'table'
-                  ? 'bg-blue-50 border-blue-200 text-blue-700'
-                  : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                  ? 'bg-[#1f6feb33] border-[#1f6feb] text-[#58a6ff]'
+                  : 'bg-[#161b22] border-[#30363d] text-gray-400 hover:bg-[#0d1117]'
               }`}
             >
               Table
@@ -109,8 +109,8 @@ export function HeadersTable({ headers, title = 'Headers' }: HeadersTableProps) 
               onClick={() => setViewMode('json')}
               className={`px-3 py-1 text-xs font-medium rounded-r-md border -ml-px ${
                 viewMode === 'json'
-                  ? 'bg-blue-50 border-blue-200 text-blue-700'
-                  : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                  ? 'bg-[#1f6feb33] border-[#1f6feb] text-[#58a6ff]'
+                  : 'bg-[#161b22] border-[#30363d] text-gray-400 hover:bg-[#0d1117]'
               }`}
             >
               JSON
@@ -123,8 +123,8 @@ export function HeadersTable({ headers, title = 'Headers' }: HeadersTableProps) 
       {/* Content */}
       {viewMode === 'table' ? (
         <div className="overflow-auto max-h-80">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50 sticky top-0">
+          <table className="min-w-full divide-y divide-[#21262d]">
+            <thead className="bg-[#0d1117] sticky top-0">
               <tr>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/3">
                   Name
@@ -134,7 +134,7 @@ export function HeadersTable({ headers, title = 'Headers' }: HeadersTableProps) 
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-100">
+            <tbody className="bg-[#161b22] divide-y divide-[#21262d]">
               {headerEntries.length === 0 ? (
                 <tr>
                   <td colSpan={2} className="px-4 py-8 text-center text-gray-500 text-sm">
@@ -143,14 +143,14 @@ export function HeadersTable({ headers, title = 'Headers' }: HeadersTableProps) 
                 </tr>
               ) : (
                 headerEntries.map(([key, value]) => (
-                  <tr key={key} className="group hover:bg-gray-50">
+                  <tr key={key} className="group hover:bg-[#0d1117]">
                     <td className="px-4 py-2 text-sm align-top">
                       <div className="flex items-center gap-2">
                         <span
                           className={`font-mono ${
                             isImportant(key)
-                              ? 'font-medium text-blue-700'
-                              : 'text-gray-700'
+                              ? 'font-medium text-[#58a6ff]'
+                              : 'text-gray-300'
                           }`}
                         >
                           {key}
@@ -158,7 +158,7 @@ export function HeadersTable({ headers, title = 'Headers' }: HeadersTableProps) 
                         {isSensitive(key) && (
                           <button
                             onClick={() => setShowSensitive(!showSensitive)}
-                            className="text-xs text-gray-400 hover:text-gray-600"
+                            className="text-xs text-gray-400 hover:text-gray-400"
                             title={showSensitive ? 'Hide sensitive value' : 'Show sensitive value'}
                           >
                             {showSensitive ? '🔓' : '🔒'}
@@ -166,7 +166,7 @@ export function HeadersTable({ headers, title = 'Headers' }: HeadersTableProps) 
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-2 text-sm font-mono text-gray-600 break-all">
+                    <td className="px-4 py-2 text-sm font-mono text-gray-400 break-all">
                       <div className="flex items-start gap-1">
                         <span className="flex-1">{formatValue(key, value)}</span>
                         <InlineCopyButton text={value} />
@@ -179,7 +179,7 @@ export function HeadersTable({ headers, title = 'Headers' }: HeadersTableProps) 
           </table>
         </div>
       ) : (
-        <pre className="p-4 text-xs font-mono bg-gray-50 overflow-auto max-h-80 whitespace-pre-wrap">
+        <pre className="p-4 text-xs font-mono bg-[#0d1117] overflow-auto max-h-80 whitespace-pre-wrap">
           {JSON.stringify(parsedHeaders, null, 2)}
         </pre>
       )}
@@ -208,7 +208,7 @@ export function CompactHeaders({ headers }: { headers: string }) {
       {importantEntries.slice(0, 3).map(([key, value]) => (
         <div key={key} className="flex gap-2">
           <span className="text-gray-500 font-medium">{key}:</span>
-          <span className="text-gray-700 truncate max-w-xs">{value}</span>
+          <span className="text-gray-300 truncate max-w-xs">{value}</span>
         </div>
       ))}
       {importantEntries.length > 3 && (

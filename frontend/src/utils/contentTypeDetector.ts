@@ -98,14 +98,14 @@ export function getContentTypeLabel(type: ContentType): string {
 export function getContentTypeColor(type: ContentType): string {
   switch (type) {
     case 'json':
-      return 'bg-yellow-100 text-yellow-800';
+      return 'bg-yellow-900/40 text-yellow-400';
     case 'html':
-      return 'bg-orange-100 text-orange-800';
+      return 'bg-orange-900/40 text-orange-400';
     case 'xml':
-      return 'bg-purple-100 text-purple-800';
+      return 'bg-purple-900/40 text-purple-400';
     case 'text':
-      return 'bg-gray-100 text-gray-800';
+      return 'bg-gray-700/40 text-gray-400';
     default:
-      return 'bg-gray-100 text-gray-600';
+      return 'bg-gray-700/40 text-gray-400';
   }
 }
