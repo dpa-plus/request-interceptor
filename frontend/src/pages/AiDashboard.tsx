@@ -129,21 +129,21 @@ function AiDashboard() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">AI Dashboard</h1>
+          <h1 className="text-2xl font-bold text-gray-100">AI Dashboard</h1>
           <p className="text-sm text-gray-500 mt-1">
             Monitor AI API usage and costs
           </p>
         </div>
         <button
           onClick={fetchData}
-          className="px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+          className="px-4 py-2 bg-[#161b22] border border-[#30363d] rounded-md text-sm font-medium text-gray-300 hover:bg-[#1c2333]"
         >
           Refresh
         </button>
       </div>
 
       {error && (
-        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-700">
+        <div className="mb-4 p-4 bg-red-900/40 border border-red-800 rounded-md text-red-400">
           {error}
         </div>
       )}
@@ -152,7 +152,7 @@ function AiDashboard() {
         <>
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <div className="bg-white rounded-lg shadow p-4">
+            <div className="bg-[#161b22] rounded-lg border border-[#30363d] p-4">
               <div className="text-sm font-medium text-gray-500">AI Requests</div>
               <div className="mt-1 text-2xl font-semibold text-purple-600">
                 {stats.totalAiRequests.toLocaleString()}
@@ -162,7 +162,7 @@ function AiDashboard() {
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow p-4">
+            <div className="bg-[#161b22] rounded-lg border border-[#30363d] p-4">
               <div className="text-sm font-medium text-gray-500">Total Tokens</div>
               <div className="mt-1 text-2xl font-semibold text-blue-600">
                 {formatTokens(stats.ai.totalTokens)}
@@ -172,7 +172,7 @@ function AiDashboard() {
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow p-4">
+            <div className="bg-[#161b22] rounded-lg border border-[#30363d] p-4">
               <div className="text-sm font-medium text-gray-500">Total Cost</div>
               <div className="mt-1 text-2xl font-semibold text-green-600">
                 {formatCost(stats.ai.totalCostMicros)}
@@ -180,7 +180,7 @@ function AiDashboard() {
               <div className="text-xs text-gray-400">estimated</div>
             </div>
 
-            <div className="bg-white rounded-lg shadow p-4">
+            <div className="bg-[#161b22] rounded-lg border border-[#30363d] p-4">
               <div className="text-sm font-medium text-gray-500">Avg Duration</div>
               <div className="mt-1 text-2xl font-semibold text-orange-600">
                 {stats.ai.avgDurationMs}ms
@@ -194,9 +194,9 @@ function AiDashboard() {
           {/* Usage by Provider & Model */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             {/* By Provider */}
-            <div className="bg-white rounded-lg shadow">
-              <div className="px-4 py-3 border-b">
-                <h2 className="text-lg font-medium text-gray-900">By Provider</h2>
+            <div className="bg-[#161b22] rounded-lg border border-[#30363d]">
+              <div className="px-4 py-3 border-b border-[#30363d]">
+                <h2 className="text-lg font-medium text-gray-100">By Provider</h2>
               </div>
               <div className="p-4">
                 {stats.ai.byProvider.length === 0 ? (
@@ -206,7 +206,7 @@ function AiDashboard() {
                     {stats.ai.byProvider.map((p) => (
                       <div key={p.provider} className="flex items-center justify-between">
                         <div>
-                          <span className="font-medium text-gray-900 capitalize">
+                          <span className="font-medium text-gray-100 capitalize">
                             {p.provider}
                           </span>
                           <span className="ml-2 text-sm text-gray-500">
@@ -214,7 +214,7 @@ function AiDashboard() {
                           </span>
                         </div>
                         <div className="text-right">
-                          <div className="text-sm font-medium text-gray-900">
+                          <div className="text-sm font-medium text-gray-100">
                             {formatCost(p.totalCostMicros)}
                           </div>
                           <div className="text-xs text-gray-500">
@@ -229,9 +229,9 @@ function AiDashboard() {
             </div>
 
             {/* By Model */}
-            <div className="bg-white rounded-lg shadow">
-              <div className="px-4 py-3 border-b">
-                <h2 className="text-lg font-medium text-gray-900">By Model</h2>
+            <div className="bg-[#161b22] rounded-lg border border-[#30363d]">
+              <div className="px-4 py-3 border-b border-[#30363d]">
+                <h2 className="text-lg font-medium text-gray-100">By Model</h2>
               </div>
               <div className="p-4">
                 {stats.ai.byModel.length === 0 ? (
@@ -241,7 +241,7 @@ function AiDashboard() {
                     {stats.ai.byModel.map((m) => (
                       <div key={m.model} className="flex items-center justify-between">
                         <div>
-                          <span className="font-medium text-gray-900">
+                          <span className="font-medium text-gray-100">
                             {m.model}
                           </span>
                           <span className="ml-2 text-sm text-gray-500">
@@ -249,7 +249,7 @@ function AiDashboard() {
                           </span>
                         </div>
                         <div className="text-right">
-                          <div className="text-sm font-medium text-gray-900">
+                          <div className="text-sm font-medium text-gray-100">
                             {formatCost(m.totalCostMicros)}
                           </div>
                           <div className="text-xs text-gray-500">
@@ -267,7 +267,7 @@ function AiDashboard() {
           {/* OpenRouter Section */}
           {stats.openrouter && stats.openrouter.enrichedCount > 0 && (
             <div className="mb-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">
+              <h2 className="text-lg font-medium text-gray-100 mb-4">
                 OpenRouter Insights
                 <span className="ml-2 text-sm font-normal text-gray-500">
                   (from {stats.openrouter.enrichedCount} enriched requests)
@@ -311,9 +311,9 @@ function AiDashboard() {
 
               {/* By Actual Provider (the provider that served via OpenRouter) */}
               {stats.openrouter.byActualProvider.length > 0 && (
-                <div className="bg-white rounded-lg shadow">
-                  <div className="px-4 py-3 border-b">
-                    <h3 className="text-md font-medium text-gray-900">
+                <div className="bg-[#161b22] rounded-lg border border-[#30363d]">
+                  <div className="px-4 py-3 border-b border-[#30363d]">
+                    <h3 className="text-md font-medium text-gray-100">
                       By Actual Provider
                       <span className="ml-2 text-sm font-normal text-gray-500">
                         (providers that served OpenRouter requests)
@@ -325,10 +325,10 @@ function AiDashboard() {
                       {stats.openrouter.byActualProvider.map((p) => (
                         <div key={p.provider} className="flex items-center justify-between">
                           <div>
-                            <span className="font-medium text-gray-900">
+                            <span className="font-medium text-gray-100">
                               {p.provider}
                             </span>
-                            <span className="ml-2 text-sm text-gray-500">
+                            <span className="ml-2 text-sm text-gray-400">
                               {p.count} requests
                             </span>
                           </div>
@@ -352,13 +352,13 @@ function AiDashboard() {
       )}
 
       {/* Recent AI Requests */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-4 py-3 border-b">
-          <h2 className="text-lg font-medium text-gray-900">Recent AI Requests</h2>
+      <div className="bg-[#161b22] rounded-lg border border-[#30363d]">
+        <div className="px-4 py-3 border-b border-[#30363d]">
+          <h2 className="text-lg font-medium text-gray-100">Recent AI Requests</h2>
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-[#21262d]">
+            <thead className="bg-[#0d1117]">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                   Provider
@@ -383,7 +383,7 @@ function AiDashboard() {
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-[#161b22] divide-y divide-[#21262d]">
               {aiRequests.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
@@ -394,7 +394,7 @@ function AiDashboard() {
                 aiRequests.map((req) => (
                   <tr
                     key={req.id}
-                    className="relative hover:bg-gray-50"
+                    className="relative hover:bg-[#1c2333]"
                   >
                     <td className="px-4 py-3 whitespace-nowrap">
                       <Link
@@ -403,21 +403,21 @@ function AiDashboard() {
                         aria-label={`View request for ${req.model || req.provider}`}
                       />
                       <div className="relative z-10 flex flex-col gap-1">
-                        <span className="px-2 py-1 text-xs font-medium rounded bg-purple-100 text-purple-800 capitalize">
+                        <span className="px-2 py-1 text-xs font-medium rounded bg-purple-900/40 text-purple-300 capitalize">
                           {req.provider}
                         </span>
                         {req.provider === 'openrouter' && req.openrouterProviderName && (
-                          <span className="px-2 py-0.5 text-xs rounded bg-gray-100 text-gray-600">
+                          <span className="px-2 py-0.5 text-xs rounded bg-[#1c2333] text-gray-400">
                             via {req.openrouterProviderName}
                           </span>
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900">
+                    <td className="px-4 py-3 text-sm text-gray-300">
                       {req.model || '-'}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
-                      <div className="text-gray-900">
+                      <div className="text-gray-300">
                         {req.totalTokens?.toLocaleString() || '-'}
                       </div>
                       <div className="text-xs text-gray-500">
@@ -458,14 +458,14 @@ function AiDashboard() {
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="flex flex-col gap-1">
                         {req.isStreaming ? (
-                          <span className="px-2 py-0.5 text-xs rounded bg-blue-100 text-blue-800">
+                          <span className="px-2 py-0.5 text-xs rounded bg-[#1f6feb33] text-[#58a6ff]">
                             Stream
                           </span>
                         ) : (
                           <span className="text-gray-400">-</span>
                         )}
                         {req.openrouterEnriched && (
-                          <span className="px-2 py-0.5 text-xs rounded bg-purple-50 text-purple-600">
+                          <span className="px-2 py-0.5 text-xs rounded bg-purple-900/40 text-purple-300">
                             Enriched
                           </span>
                         )}

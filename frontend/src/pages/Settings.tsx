@@ -110,32 +110,32 @@ function Settings() {
 
   return (
     <div className="max-w-4xl">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Settings</h1>
+      <h1 className="text-2xl font-bold text-gray-100 mb-6">Settings</h1>
 
       {error && (
-        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-700">
+        <div className="mb-4 p-4 bg-red-900/40 border border-red-800 rounded-md text-red-400">
           {error}
         </div>
       )}
 
       {success && (
-        <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-md text-green-700">
+        <div className="mb-4 p-4 bg-green-900/40 border border-green-800 rounded-md text-green-300">
           Settings saved successfully!
         </div>
       )}
 
-      <form onSubmit={saveConfig} className="bg-white shadow rounded-lg p-6 mb-6">
-        <h2 className="text-lg font-medium text-gray-900 mb-4">General Settings</h2>
+      <form onSubmit={saveConfig} className="bg-[#161b22] border border-[#30363d] rounded-lg p-6 mb-6">
+        <h2 className="text-lg font-medium text-gray-100 mb-4">General Settings</h2>
 
         <div className="space-y-6">
           <div>
             <label
               htmlFor="defaultTargetUrl"
-              className="block text-sm font-medium text-gray-700"
+              className="block text-sm font-medium text-gray-300"
             >
               Default Target URL
             </label>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-gray-400 mt-1">
               Fallback URL when no __target parameter or routing rule matches
             </p>
             <input
@@ -144,18 +144,18 @@ function Settings() {
               value={defaultTargetUrl}
               onChange={(e) => setDefaultTargetUrl(e.target.value)}
               placeholder="https://api.example.com"
-              className="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border px-3 py-2"
+              className="mt-2 block w-full rounded-md border-[#30363d] bg-[#0d1117] text-gray-200 focus:border-[#1f6feb] focus:ring-[#1f6feb] sm:text-sm border px-3 py-2"
             />
           </div>
 
           <div>
             <label
               htmlFor="maxBodySize"
-              className="block text-sm font-medium text-gray-700"
+              className="block text-sm font-medium text-gray-300"
             >
               Max Body Size for Logging
             </label>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-gray-400 mt-1">
               Request/response bodies larger than this will be truncated in logs
             </p>
             <div className="mt-2 flex items-center gap-4">
@@ -169,24 +169,24 @@ function Settings() {
                 onChange={(e) => setMaxBodySize(parseInt(e.target.value))}
                 className="flex-1"
               />
-              <span className="text-sm text-gray-700 w-20">{formatBytes(maxBodySize)}</span>
+              <span className="text-sm text-gray-300 w-20">{formatBytes(maxBodySize)}</span>
             </div>
           </div>
 
-          <div className="flex items-center justify-between py-3 border-t border-b">
+          <div className="flex items-center justify-between py-3 border-t border-b border-[#30363d]">
             <div>
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-gray-300">
                 Enable Logging
               </label>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-gray-400">
                 Log all incoming requests to the database
               </p>
             </div>
             <button
               type="button"
               onClick={() => setLogEnabled(!logEnabled)}
-              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                logEnabled ? 'bg-blue-600' : 'bg-gray-200'
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#1f6feb] focus:ring-offset-2 ${
+                logEnabled ? 'bg-blue-600' : 'bg-[#30363d]'
               }`}
             >
               <span
@@ -199,18 +199,18 @@ function Settings() {
 
           <div className="flex items-center justify-between">
             <div>
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-gray-300">
                 AI Request Detection
               </label>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-gray-400">
                 Automatically detect and parse OpenAI-compatible API requests
               </p>
             </div>
             <button
               type="button"
               onClick={() => setAiDetectionEnabled(!aiDetectionEnabled)}
-              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                aiDetectionEnabled ? 'bg-purple-600' : 'bg-gray-200'
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#1f6feb] focus:ring-offset-2 ${
+                aiDetectionEnabled ? 'bg-purple-600' : 'bg-[#30363d]'
               }`}
             >
               <span
@@ -222,8 +222,8 @@ function Settings() {
           </div>
 
           {config && (
-            <div className="pt-4 border-t">
-              <p className="text-sm text-gray-500">
+            <div className="pt-4 border-t border-[#30363d]">
+              <p className="text-sm text-gray-400">
                 Last updated: {new Date(config.updatedAt).toLocaleString()}
               </p>
             </div>
@@ -234,7 +234,7 @@ function Settings() {
           <button
             type="submit"
             disabled={saving}
-            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#1f6feb] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? 'Saving...' : 'Save Settings'}
           </button>
@@ -242,15 +242,15 @@ function Settings() {
       </form>
 
       {/* AI Model Pricing */}
-      <div className="bg-white shadow rounded-lg p-6">
-        <h2 className="text-lg font-medium text-gray-900 mb-4">AI Model Pricing</h2>
-        <p className="text-sm text-gray-500 mb-4">
+      <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-6">
+        <h2 className="text-lg font-medium text-gray-100 mb-4">AI Model Pricing</h2>
+        <p className="text-sm text-gray-400 mb-4">
           Pricing used for cost estimation (micro-dollars per 1M tokens)
         </p>
 
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-[#21262d]">
+            <thead className="bg-[#0d1117]">
               <tr>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                   Provider
@@ -266,19 +266,19 @@ function Settings() {
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-[#161b22] divide-y divide-[#21262d]">
               {pricing.map((p) => (
                 <tr key={p.id}>
-                  <td className="px-4 py-2 text-sm text-gray-900 capitalize">
+                  <td className="px-4 py-2 text-sm text-gray-300 capitalize">
                     {p.provider}
                   </td>
-                  <td className="px-4 py-2 text-sm text-gray-900 font-mono">
+                  <td className="px-4 py-2 text-sm text-gray-300 font-mono">
                     {p.modelPattern}
                   </td>
-                  <td className="px-4 py-2 text-sm text-gray-900 text-right">
+                  <td className="px-4 py-2 text-sm text-gray-300 text-right">
                     {formatPrice(p.inputPricePerMillion)}
                   </td>
-                  <td className="px-4 py-2 text-sm text-gray-900 text-right">
+                  <td className="px-4 py-2 text-sm text-gray-300 text-right">
                     {formatPrice(p.outputPricePerMillion)}
                   </td>
                 </tr>
@@ -293,22 +293,22 @@ function Settings() {
       </div>
 
       {/* Usage Instructions */}
-      <div className="bg-white shadow rounded-lg p-6 mt-6">
-        <h2 className="text-lg font-medium text-gray-900 mb-4">Target Routing</h2>
-        <p className="text-sm text-gray-500 mb-4">
+      <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-6 mt-6">
+        <h2 className="text-lg font-medium text-gray-100 mb-4">Target Routing</h2>
+        <p className="text-sm text-gray-400 mb-4">
           The proxy needs to know where to forward requests. There are three ways to specify the target (in priority order):
         </p>
 
-        <div className="space-y-6 text-sm text-gray-600">
+        <div className="space-y-6 text-sm text-gray-400">
           <div>
-            <h3 className="font-medium text-gray-900 flex items-center gap-2">
-              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-800 text-xs font-bold">1</span>
+            <h3 className="font-medium text-gray-100 flex items-center gap-2">
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#1f6feb33] text-[#58a6ff] text-xs font-bold">1</span>
               Query Parameter
             </h3>
             <p className="mt-1 ml-7">
-              Add <code className="bg-gray-100 px-1 rounded">__target</code> to the URL. The parameter is stripped before forwarding.
+              Add <code className="bg-[#1c2333] px-1 rounded">__target</code> to the URL. The parameter is stripped before forwarding.
             </p>
-            <pre className="mt-2 ml-7 p-3 bg-gray-50 rounded text-xs overflow-auto">
+            <pre className="mt-2 ml-7 p-3 bg-[#0d1117] rounded text-xs overflow-auto">
 {`curl "http://localhost:3001/v1/chat/completions?__target=https://api.openai.com" \\
   -H "Authorization: Bearer $OPENAI_API_KEY" \\
   -d '{"model": "gpt-4o-mini", "messages": [...]}'`}
@@ -316,14 +316,14 @@ function Settings() {
           </div>
 
           <div>
-            <h3 className="font-medium text-gray-900 flex items-center gap-2">
-              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-800 text-xs font-bold">2</span>
+            <h3 className="font-medium text-gray-100 flex items-center gap-2">
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#1f6feb33] text-[#58a6ff] text-xs font-bold">2</span>
               X-Target-URL Header
             </h3>
             <p className="mt-1 ml-7">
-              Set the <code className="bg-gray-100 px-1 rounded">X-Target-URL</code> header. The header is stripped before forwarding.
+              Set the <code className="bg-[#1c2333] px-1 rounded">X-Target-URL</code> header. The header is stripped before forwarding.
             </p>
-            <pre className="mt-2 ml-7 p-3 bg-gray-50 rounded text-xs overflow-auto">
+            <pre className="mt-2 ml-7 p-3 bg-[#0d1117] rounded text-xs overflow-auto">
 {`curl http://localhost:3001/v1/chat/completions \\
   -H "X-Target-URL: https://api.openai.com" \\
   -H "Authorization: Bearer $OPENAI_API_KEY" \\
@@ -332,8 +332,8 @@ function Settings() {
           </div>
 
           <div>
-            <h3 className="font-medium text-gray-900 flex items-center gap-2">
-              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-800 text-xs font-bold">3</span>
+            <h3 className="font-medium text-gray-100 flex items-center gap-2">
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#1f6feb33] text-[#58a6ff] text-xs font-bold">3</span>
               Routing Rules / Default Target
             </h3>
             <p className="mt-1 ml-7">
@@ -345,21 +345,21 @@ function Settings() {
       </div>
 
       {/* Additional Info */}
-      <div className="bg-white shadow rounded-lg p-6 mt-6">
-        <h2 className="text-lg font-medium text-gray-900 mb-4">Features</h2>
+      <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-6 mt-6">
+        <h2 className="text-lg font-medium text-gray-100 mb-4">Features</h2>
 
-        <div className="space-y-4 text-sm text-gray-600">
+        <div className="space-y-4 text-sm text-gray-400">
           <div>
-            <h3 className="font-medium text-gray-900">AI Request Detection</h3>
+            <h3 className="font-medium text-gray-100">AI Request Detection</h3>
             <p className="mt-1">
-              Requests to OpenAI-compatible endpoints (e.g., <code className="bg-gray-100 px-1 rounded">/v1/chat/completions</code>)
+              Requests to OpenAI-compatible endpoints (e.g., <code className="bg-[#1c2333] px-1 rounded">/v1/chat/completions</code>)
               are automatically detected and parsed. The proxy supports both streaming and non-streaming responses,
               extracting token usage and calculating cost estimates.
             </p>
           </div>
 
           <div>
-            <h3 className="font-medium text-gray-900">OpenRouter Integration</h3>
+            <h3 className="font-medium text-gray-100">OpenRouter Integration</h3>
             <p className="mt-1">
               For OpenRouter requests, the proxy fetches additional metadata (actual provider, precise costs)
               from the OpenRouter Generation API after the request completes.
@@ -367,7 +367,7 @@ function Settings() {
           </div>
 
           <div>
-            <h3 className="font-medium text-gray-900">Data Retention</h3>
+            <h3 className="font-medium text-gray-100">Data Retention</h3>
             <p className="mt-1">
               Request logs are automatically deleted after <strong>30 days</strong>.
               Authorization headers are redacted after <strong>3 days</strong> for security.
@@ -375,7 +375,7 @@ function Settings() {
           </div>
 
           <div>
-            <h3 className="font-medium text-gray-900">Real-time Updates</h3>
+            <h3 className="font-medium text-gray-100">Real-time Updates</h3>
             <p className="mt-1">
               The dashboard uses Socket.IO for real-time updates. New requests appear immediately
               and update when the response is received.

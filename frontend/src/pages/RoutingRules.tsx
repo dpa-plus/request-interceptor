@@ -227,7 +227,7 @@ function RoutingRules() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Routing Rules</h1>
+          <h1 className="text-2xl font-bold text-gray-100">Routing Rules</h1>
           <p className="text-sm text-gray-500 mt-1">
             Configure how requests are routed to target URLs
           </p>
@@ -236,7 +236,7 @@ function RoutingRules() {
           <div className="relative">
             <button
               onClick={() => setShowExamples(!showExamples)}
-              className="px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+              className="px-4 py-2 bg-[#161b22] border border-[#30363d] rounded-md text-sm font-medium text-gray-300 hover:bg-[#1c2333]"
             >
               Examples
               <svg className="w-4 h-4 ml-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -244,17 +244,17 @@ function RoutingRules() {
               </svg>
             </button>
             {showExamples && (
-              <div className="absolute right-0 mt-2 w-72 bg-white rounded-lg shadow-lg border z-20">
+              <div className="absolute right-0 mt-2 w-72 bg-[#161b22] rounded-lg border border-[#30363d] z-20">
                 <div className="p-2">
-                  <div className="text-xs font-medium text-gray-500 px-2 py-1">Quick Start Templates</div>
+                  <div className="text-xs font-medium text-gray-400 px-2 py-1">Quick Start Templates</div>
                   {EXAMPLE_RULES.map((example) => (
                     <button
                       key={example.name}
                       onClick={() => openNewRule(example)}
-                      className="w-full text-left px-3 py-2 rounded hover:bg-gray-50"
+                      className="w-full text-left px-3 py-2 rounded hover:bg-[#1c2333]"
                     >
-                      <div className="font-medium text-gray-900 text-sm">{example.name}</div>
-                      <div className="text-xs text-gray-500">{example.description}</div>
+                      <div className="font-medium text-gray-100 text-sm">{example.name}</div>
+                      <div className="text-xs text-gray-400">{example.description}</div>
                     </button>
                   ))}
                 </div>
@@ -274,7 +274,7 @@ function RoutingRules() {
       </div>
 
       {error && (
-        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-700 flex items-center justify-between">
+        <div className="mb-4 p-4 bg-red-900/40 border border-red-800 rounded-md text-red-400 flex items-center justify-between">
           <span>{error}</span>
           <button onClick={() => setError(null)} className="text-red-500 hover:text-red-700">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -313,14 +313,14 @@ function RoutingRules() {
       </div>
 
       {/* Rules List */}
-      <div className="bg-white shadow rounded-lg overflow-hidden">
+      <div className="bg-[#161b22] border border-[#30363d] rounded-lg overflow-hidden">
         {rules.length === 0 ? (
           <div className="p-12 text-center">
             <svg className="w-12 h-12 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
             </svg>
-            <h3 className="text-lg font-medium text-gray-900 mb-1">No routing rules</h3>
-            <p className="text-gray-500 mb-4">Get started by creating your first routing rule</p>
+            <h3 className="text-lg font-medium text-gray-100 mb-1">No routing rules</h3>
+            <p className="text-gray-400 mb-4">Get started by creating your first routing rule</p>
             <button
               onClick={() => openNewRule()}
               className="px-4 py-2 bg-blue-600 rounded-md text-sm font-medium text-white hover:bg-blue-700"
@@ -329,13 +329,13 @@ function RoutingRules() {
             </button>
           </div>
         ) : (
-          <div className="divide-y divide-gray-200">
+          <div className="divide-y divide-[#21262d]">
             {rules
               .sort((a, b) => b.priority - a.priority)
               .map((rule) => (
                 <div
                   key={rule.id}
-                  className={`p-4 hover:bg-gray-50 transition-colors ${!rule.enabled ? 'opacity-50' : ''}`}
+                  className={`p-4 hover:bg-[#1c2333] transition-colors ${!rule.enabled ? 'opacity-50' : ''}`}
                 >
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex items-center gap-4 flex-1 min-w-0">
@@ -343,7 +343,7 @@ function RoutingRules() {
                       <button
                         onClick={() => toggleEnabled(rule)}
                         className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                          rule.enabled ? 'bg-blue-600' : 'bg-gray-200'
+                          rule.enabled ? 'bg-blue-600' : 'bg-[#30363d]'
                         }`}
                         title={rule.enabled ? 'Disable rule' : 'Enable rule'}
                       >
@@ -357,20 +357,20 @@ function RoutingRules() {
                       {/* Rule Info */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium text-gray-900">{rule.name}</span>
-                          <span className="px-2 py-0.5 text-xs font-medium rounded bg-gray-100 text-gray-600">
+                          <span className="font-medium text-gray-100">{rule.name}</span>
+                          <span className="px-2 py-0.5 text-xs font-medium rounded bg-[#1c2333] text-gray-400">
                             Priority: {rule.priority}
                           </span>
                           <span className={`px-2 py-0.5 text-xs font-medium rounded ${
-                            rule.matchType === 'path_prefix' ? 'bg-green-100 text-green-700' :
-                            rule.matchType === 'path_regex' ? 'bg-purple-100 text-purple-700' :
-                            'bg-orange-100 text-orange-700'
+                            rule.matchType === 'path_prefix' ? 'bg-green-900/40 text-green-300' :
+                            rule.matchType === 'path_regex' ? 'bg-purple-900/40 text-purple-300' :
+                            'bg-orange-900/40 text-orange-300'
                           }`}>
                             {MATCH_TYPES.find((t) => t.value === rule.matchType)?.label}
                           </span>
                         </div>
                         <div className="mt-1 flex items-center gap-2 text-sm">
-                          <code className="bg-gray-100 px-2 py-0.5 rounded text-gray-700 font-mono text-xs">
+                          <code className="bg-[#1c2333] px-2 py-0.5 rounded text-gray-300 font-mono text-xs">
                             {rule.matchPattern}
                           </code>
                           <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -385,7 +385,7 @@ function RoutingRules() {
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => movePriority(rule, 'up')}
-                        className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
+                        className="p-1.5 text-gray-400 hover:text-gray-200 hover:bg-[#1c2333] rounded"
                         title="Increase priority"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -394,7 +394,7 @@ function RoutingRules() {
                       </button>
                       <button
                         onClick={() => movePriority(rule, 'down')}
-                        className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
+                        className="p-1.5 text-gray-400 hover:text-gray-200 hover:bg-[#1c2333] rounded"
                         title="Decrease priority"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -406,7 +406,7 @@ function RoutingRules() {
                           setEditingRule(rule);
                           setTestPath(rule.matchPattern);
                         }}
-                        className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded"
+                        className="p-1.5 text-[#58a6ff] hover:text-blue-300 hover:bg-[#1f6feb33] rounded"
                         title="Edit rule"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -415,7 +415,7 @@ function RoutingRules() {
                       </button>
                       <button
                         onClick={() => setDeleteConfirm(rule.id)}
-                        className="p-1.5 text-red-600 hover:text-red-800 hover:bg-red-50 rounded"
+                        className="p-1.5 text-red-500 hover:text-red-400 hover:bg-red-900/40 rounded"
                         title="Delete rule"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -433,16 +433,16 @@ function RoutingRules() {
       {/* Delete Confirmation Modal */}
       {deleteConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+          <div className="bg-[#161b22] rounded-lg border border-[#30363d] max-w-md w-full p-6">
             <div className="flex items-center gap-3 mb-4">
-              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-900/40 flex items-center justify-center">
                 <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
               </div>
               <div>
-                <h3 className="text-lg font-medium text-gray-900">Delete Rule</h3>
-                <p className="text-sm text-gray-500">
+                <h3 className="text-lg font-medium text-gray-100">Delete Rule</h3>
+                <p className="text-sm text-gray-400">
                   Are you sure you want to delete "{rules.find((r) => r.id === deleteConfirm)?.name}"?
                 </p>
               </div>
@@ -450,7 +450,7 @@ function RoutingRules() {
             <div className="flex gap-3 justify-end">
               <button
                 onClick={() => setDeleteConfirm(null)}
-                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="px-4 py-2 border border-[#30363d] rounded-md text-sm font-medium text-gray-300 hover:bg-[#1c2333]"
               >
                 Cancel
               </button>
@@ -468,14 +468,14 @@ function RoutingRules() {
       {/* Edit/Create Modal */}
       {editingRule && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b flex justify-between items-center sticky top-0 bg-white">
-              <h2 className="text-lg font-medium">
+          <div className="bg-[#161b22] rounded-lg border border-[#30363d] max-w-xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-[#30363d] flex justify-between items-center sticky top-0 bg-[#161b22]">
+              <h2 className="text-lg font-medium text-gray-100">
                 {editingRule.id ? 'Edit Routing Rule' : 'Create Routing Rule'}
               </h2>
               <button
                 onClick={() => setEditingRule(null)}
-                className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100"
+                className="text-gray-400 hover:text-gray-200 p-1 rounded hover:bg-[#1c2333]"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -486,20 +486,20 @@ function RoutingRules() {
             <div className="p-6 space-y-5">
               {/* Name */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Rule Name</label>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Rule Name</label>
                 <input
                   type="text"
                   value={editingRule.name || ''}
                   onChange={(e) => setEditingRule({ ...editingRule, name: e.target.value })}
-                  className="block w-full rounded-md border-gray-300 shadow-sm border px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="block w-full rounded-md border-[#30363d] bg-[#0d1117] text-gray-200 border px-3 py-2 focus:ring-[#1f6feb] focus:border-[#1f6feb]"
                   placeholder="OpenAI API"
                 />
-                <p className="text-xs text-gray-500 mt-1">A descriptive name to identify this rule</p>
+                <p className="text-xs text-gray-400 mt-1">A descriptive name to identify this rule</p>
               </div>
 
               {/* Match Type Selection */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Match Type</label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Match Type</label>
                 <div className="grid grid-cols-1 gap-2">
                   {MATCH_TYPES.map((type) => (
                     <button
@@ -508,18 +508,18 @@ function RoutingRules() {
                       onClick={() => setEditingRule({ ...editingRule, matchType: type.value })}
                       className={`flex items-center gap-3 p-3 rounded-lg border-2 text-left transition-colors ${
                         editingRule.matchType === type.value
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-gray-300'
+                          ? 'border-[#1f6feb] bg-[#1f6feb33]'
+                          : 'border-[#30363d] hover:border-[#58a6ff]'
                       }`}
                     >
                       <div className={`p-2 rounded ${
-                        editingRule.matchType === type.value ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'
+                        editingRule.matchType === type.value ? 'bg-[#1f6feb33] text-[#58a6ff]' : 'bg-[#1c2333] text-gray-400'
                       }`}>
                         {type.icon}
                       </div>
                       <div>
-                        <div className="font-medium text-gray-900">{type.label}</div>
-                        <div className="text-xs text-gray-500">{type.description}</div>
+                        <div className="font-medium text-gray-100">{type.label}</div>
+                        <div className="text-xs text-gray-400">{type.description}</div>
                       </div>
                     </button>
                   ))}
@@ -528,48 +528,48 @@ function RoutingRules() {
 
               {/* Pattern */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-300 mb-1">
                   Match Pattern
                   {editingRule.matchType?.includes('regex') && (
-                    <span className="ml-1 text-purple-600">(Regex)</span>
+                    <span className="ml-1 text-purple-300">(Regex)</span>
                   )}
                 </label>
                 <input
                   type="text"
                   value={editingRule.matchPattern || ''}
                   onChange={(e) => setEditingRule({ ...editingRule, matchPattern: e.target.value })}
-                  className="block w-full rounded-md border-gray-300 shadow-sm border px-3 py-2 font-mono focus:ring-blue-500 focus:border-blue-500"
+                  className="block w-full rounded-md border-[#30363d] bg-[#0d1117] text-gray-200 border px-3 py-2 font-mono focus:ring-[#1f6feb] focus:border-[#1f6feb]"
                   placeholder={matchTypeConfig?.placeholder}
                 />
-                <p className="text-xs text-gray-500 mt-1">
-                  Example match: <code className="bg-gray-100 px-1 rounded">{matchTypeConfig?.example}</code>
+                <p className="text-xs text-gray-400 mt-1">
+                  Example match: <code className="bg-[#1c2333] px-1 rounded">{matchTypeConfig?.example}</code>
                 </p>
               </div>
 
               {/* Header Name (for header_regex) */}
               {editingRule.matchType === 'header_regex' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Header Name</label>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Header Name</label>
                   <input
                     type="text"
                     value={editingRule.matchHeader || ''}
                     onChange={(e) => setEditingRule({ ...editingRule, matchHeader: e.target.value })}
-                    className="block w-full rounded-md border-gray-300 shadow-sm border px-3 py-2"
+                    className="block w-full rounded-md border-[#30363d] bg-[#0d1117] text-gray-200 border px-3 py-2"
                     placeholder="X-Api-Provider"
                   />
-                  <p className="text-xs text-gray-500 mt-1">The HTTP header to match against</p>
+                  <p className="text-xs text-gray-400 mt-1">The HTTP header to match against</p>
                 </div>
               )}
 
               {/* Live Test */}
               {editingRule.matchType !== 'header_regex' && editingRule.matchPattern && (
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Test Pattern</label>
+                <div className="bg-[#0d1117] rounded-lg p-4">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Test Pattern</label>
                   <input
                     type="text"
                     value={testPath}
                     onChange={(e) => setTestPath(e.target.value)}
-                    className="block w-full rounded-md border-gray-300 shadow-sm border px-3 py-2 font-mono text-sm"
+                    className="block w-full rounded-md border-[#30363d] bg-[#161b22] text-gray-200 border px-3 py-2 font-mono text-sm"
                     placeholder="/v1/chat/completions"
                   />
                   {testPath && (
@@ -598,37 +598,37 @@ function RoutingRules() {
 
               {/* Target URL */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Target URL</label>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Target URL</label>
                 <input
                   type="url"
                   value={editingRule.targetUrl || ''}
                   onChange={(e) => setEditingRule({ ...editingRule, targetUrl: e.target.value })}
-                  className="block w-full rounded-md border-gray-300 shadow-sm border px-3 py-2"
+                  className="block w-full rounded-md border-[#30363d] bg-[#0d1117] text-gray-200 border px-3 py-2"
                   placeholder="https://api.openai.com"
                 />
-                <p className="text-xs text-gray-500 mt-1">Requests matching this rule will be forwarded here</p>
+                <p className="text-xs text-gray-400 mt-1">Requests matching this rule will be forwarded here</p>
               </div>
 
               {/* Priority & Enabled */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Priority</label>
                   <input
                     type="number"
                     value={editingRule.priority || 0}
                     onChange={(e) => setEditingRule({ ...editingRule, priority: parseInt(e.target.value) || 0 })}
-                    className="block w-full rounded-md border-gray-300 shadow-sm border px-3 py-2"
+                    className="block w-full rounded-md border-[#30363d] bg-[#0d1117] text-gray-200 border px-3 py-2"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Higher = checked first</p>
+                  <p className="text-xs text-gray-400 mt-1">Higher = checked first</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Status</label>
                   <div className="flex items-center gap-3 h-[42px]">
                     <button
                       type="button"
                       onClick={() => setEditingRule({ ...editingRule, enabled: !editingRule.enabled })}
                       className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                        editingRule.enabled ? 'bg-blue-600' : 'bg-gray-200'
+                        editingRule.enabled ? 'bg-blue-600' : 'bg-[#30363d]'
                       }`}
                     >
                       <span
@@ -637,7 +637,7 @@ function RoutingRules() {
                         }`}
                       />
                     </button>
-                    <span className="text-sm text-gray-700">
+                    <span className="text-sm text-gray-300">
                       {editingRule.enabled ? 'Enabled' : 'Disabled'}
                     </span>
                   </div>
@@ -645,10 +645,10 @@ function RoutingRules() {
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t bg-gray-50 flex justify-end gap-3 sticky bottom-0">
+            <div className="px-6 py-4 border-t border-[#30363d] bg-[#0d1117] flex justify-end gap-3 sticky bottom-0">
               <button
                 onClick={() => setEditingRule(null)}
-                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="px-4 py-2 border border-[#30363d] rounded-md text-sm font-medium text-gray-300 hover:bg-[#1c2333]"
               >
                 Cancel
               </button>
