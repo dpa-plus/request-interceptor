@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useSocket, RequestStartEvent, RequestCompleteEvent } from '../hooks/useSocket';
+import { RequestDetailPanel } from '../components/RequestDetailPanel';
 
 interface AiRequestSummary {
   id: string;
@@ -61,6 +62,34 @@ function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+  // Tab system - open request details as tabs below the list
+  const [openTabs, setOpenTabs] = useState<{ id: string; label: string }[]>([]);
+  const [activeTabId, setActiveTabId] = useState<string | null>(null);
+
+  const tabPanelRef = useRef<HTMLDivElement>(null);
+
+  const openRequestTab = useCallback((id: string, label: string) => {
+    setOpenTabs(prev => {
+      if (prev.some(t => t.id === id)) return prev;
+      return [...prev, { id, label }];
+    });
+    setActiveTabId(id);
+    // Auto-scroll to the tab panel after React re-renders
+    setTimeout(() => {
+      tabPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  }, []);
+
+  const closeTab = useCallback((id: string) => {
+    setOpenTabs(prev => {
+      const next = prev.filter(t => t.id !== id);
+      if (activeTabId === id) {
+        setActiveTabId(next.length > 0 ? next[next.length - 1].id : null);
+      }
+      return next;
+    });
+  }, [activeTabId]);
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
   // Read filters from URL so they persist across navigation
@@ -665,7 +694,17 @@ function Dashboard() {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-100 max-w-xs truncate font-mono">
-                          <Link to={`/request/${log.id}`} className="text-[#58a6ff] hover:text-[#79c0ff] hover:underline before:absolute before:inset-0 focus:outline-none" title={log.path}>
+                          <Link
+                            to={`/request/${log.id}`}
+                            className="text-[#58a6ff] hover:text-[#79c0ff] hover:underline before:absolute before:inset-0 focus:outline-none"
+                            title={`${log.path} (Ctrl+click for full page)`}
+                            onClick={(e) => {
+                              if (!e.ctrlKey && !e.metaKey && !e.shiftKey && e.button === 0) {
+                                e.preventDefault();
+                                openRequestTab(log.id, `${log.method} ${log.path}`);
+                              }
+                            }}
+                          >
                             {log.path}
                           </Link>
                         </td>
@@ -800,7 +839,13 @@ function Dashboard() {
                       <Link
                         to={`/request/${log.id}`}
                         className="text-[#58a6ff] hover:text-[#79c0ff] hover:underline before:absolute before:inset-0 focus:outline-none"
-                        title={log.path}
+                        title={`${log.path} (Ctrl+click for full page)`}
+                        onClick={(e) => {
+                          if (!e.ctrlKey && !e.metaKey && !e.shiftKey && e.button === 0) {
+                            e.preventDefault();
+                            openRequestTab(log.id, `${log.method} ${log.path}`);
+                          }
+                        }}
                       >
                         {log.path}
                       </Link>
@@ -921,6 +966,53 @@ function Dashboard() {
                 Delete All
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Tab Panel - opens below the request list ===== */}
+      {openTabs.length > 0 && (
+        <div ref={tabPanelRef} className="mt-4 border border-[#30363d] rounded-lg overflow-hidden bg-[#0d1117]">
+          {/* Tab bar */}
+          <div className="flex items-center bg-[#161b22] border-b border-[#30363d] overflow-x-auto">
+            {openTabs.map((tab) => (
+              <div
+                key={tab.id}
+                className={`group flex items-center gap-1.5 px-3 py-2 text-xs font-medium cursor-pointer border-r border-[#30363d] shrink-0 max-w-[200px] ${
+                  activeTabId === tab.id
+                    ? 'bg-[#0d1117] text-gray-200 border-b-2 border-b-[#58a6ff]'
+                    : 'text-gray-500 hover:text-gray-300 hover:bg-[#1c2333]'
+                }`}
+                onClick={() => setActiveTabId(tab.id)}
+              >
+                <span className="truncate">{tab.label}</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    closeTab(tab.id);
+                  }}
+                  className="ml-1 p-0.5 rounded hover:bg-[#30363d] text-gray-500 hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+            {/* Close all button */}
+            {openTabs.length > 1 && (
+              <button
+                onClick={() => { setOpenTabs([]); setActiveTabId(null); }}
+                className="ml-auto px-3 py-2 text-xs text-gray-500 hover:text-gray-300 shrink-0"
+              >
+                Close all
+              </button>
+            )}
+          </div>
+
+          {/* Active tab content */}
+          <div className="h-[400px]">
+            {activeTabId && <RequestDetailPanel requestId={activeTabId} />}
           </div>
         </div>
       )}
