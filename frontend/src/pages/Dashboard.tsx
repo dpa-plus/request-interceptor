@@ -39,7 +39,6 @@ interface LogsResponse {
 }
 
 const LOGS_PER_PAGE = 50;
-const GROUP_TIME_WINDOW_MS = 5000; // Group requests within 5 seconds
 
 
 function Dashboard() {
@@ -435,51 +434,30 @@ function Dashboard() {
     if (!groupingEnabled || filteredLogs.length === 0) return new Map();
 
     const colors = new Map<string, string>();
-    let currentHost = '';
-    let currentEnd = 0;
-    let groupSize = 0;
 
-    // First pass: assign group IDs
-    const groupIds: number[] = [];
-    let groupId = 0;
+    // Group by AI model name (much more useful than hostname for AI traffic)
+    const modelGroups = new Map<string, string[]>();
     for (const log of filteredLogs) {
-      let hostname = '';
-      try { hostname = new URL(log.targetUrl).hostname; } catch { hostname = log.targetUrl || ''; }
-      const logTime = new Date(log.createdAt).getTime();
-
-      if (hostname === currentHost && Math.abs(logTime - currentEnd) <= GROUP_TIME_WINDOW_MS) {
-        groupSize++;
-      } else {
-        if (groupSize > 1) groupId++; // only increment for multi-request groups
-        else if (groupSize === 1) groupId++;
-        currentHost = hostname;
-        groupSize = 1;
-      }
-      currentEnd = logTime;
-      groupIds.push(groupId);
+      const model = log.aiRequest?.model || '';
+      if (!model) continue;
+      // Strip provider prefix (e.g. "openai/gpt-4o" → "gpt-4o")
+      const shortModel = model.replace(/^.*\//, '');
+      if (!modelGroups.has(shortModel)) modelGroups.set(shortModel, []);
+      modelGroups.get(shortModel)!.push(log.id);
     }
 
-    // Second pass: assign colors (only to groups with 2+ requests)
-    const groupCounts = new Map<number, number>();
-    for (const gid of groupIds) {
-      groupCounts.set(gid, (groupCounts.get(gid) || 0) + 1);
-    }
-
-    const groupColorMap = new Map<number, string>();
+    // Assign colors to models with 2+ requests
     let ci = 0;
-    for (let i = 0; i < filteredLogs.length; i++) {
-      const gid = groupIds[i];
-      if ((groupCounts.get(gid) || 0) >= 2) {
-        if (!groupColorMap.has(gid)) {
-          groupColorMap.set(gid, GROUP_COLORS[ci % GROUP_COLORS.length]);
-          ci++;
-        }
-        colors.set(filteredLogs[i].id, groupColorMap.get(gid)!);
-      }
+    for (const [, ids] of modelGroups) {
+      if (ids.length < 2) continue;
+      const color = GROUP_COLORS[ci % GROUP_COLORS.length];
+      for (const id of ids) colors.set(id, color);
+      ci++;
     }
 
     return colors;
   }, [filteredLogs, groupingEnabled]);
+
 
   const getMethodColor = (method: string) => {
     const colors: Record<string, string> = {
@@ -725,7 +703,7 @@ function Dashboard() {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
             </svg>
-            {groupingEnabled ? 'Grouped by host' : 'Group by host'}
+            {groupingEnabled ? 'Grouped by model' : 'Group by model'}
           </button>
 
           {/* Clear filters */}
@@ -761,10 +739,10 @@ function Dashboard() {
                 {[
                   { key: 'method', label: 'Method' },
                   { key: 'path', label: 'Path' },
-                  { key: '', label: 'Target' },
+                  { key: '', label: 'Model' },
                   { key: 'status', label: 'Status' },
                   { key: 'time', label: 'Time' },
-                  { key: '', label: 'AI' },
+                  { key: '', label: 'Cost' },
                   { key: 'timestamp', label: 'Timestamp' },
                 ].map(({ key, label }) => (
                   <th
@@ -886,8 +864,16 @@ function Dashboard() {
                           {log.path}
                         </Link>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-500 max-w-xs truncate">
-                        {log.targetUrl || '-'}
+                      <td className="px-4 py-3 text-sm max-w-[180px] truncate">
+                        {log.isAiRequest && log.aiRequest?.model ? (
+                          <span className="text-purple-300 font-medium" title={log.aiRequest.model}>
+                            {log.aiRequest.model.replace(/^.*\//, '')}
+                          </span>
+                        ) : (
+                          <span className="text-gray-600 text-xs truncate" title={log.targetUrl}>
+                            {(() => { try { return new URL(log.targetUrl).hostname; } catch { return '-'; } })()}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         {log.statusCode === null ? (
@@ -910,19 +896,19 @@ function Dashboard() {
                           </span>
                         ) : '-'}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        {log.isAiRequest && log.aiRequest ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-900/40 text-purple-300">
-                            {log.aiRequest.model || log.aiRequest.provider || 'AI'}
+                      <td className="px-4 py-3 whitespace-nowrap text-sm">
+                        {log.aiRequest?.totalCostMicros ? (
+                          <span className="text-green-400 font-medium">
+                            ${(log.aiRequest.totalCostMicros / 1_000_000).toFixed(4)}
                           </span>
-                        ) : log.isAiRequest ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-900/40 text-purple-300">
-                            AI
-                        </span>
-                      ) : (
-                        <span className="text-gray-300">-</span>
-                      )}
-                    </td>
+                        ) : log.aiRequest?.totalTokens ? (
+                          <span className="text-gray-400 text-xs">
+                            {log.aiRequest.totalTokens.toLocaleString()} tok
+                          </span>
+                        ) : (
+                          <span className="text-gray-600">-</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                         {(() => {
                           const d = new Date(log.createdAt);
