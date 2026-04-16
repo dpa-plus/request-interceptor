@@ -115,6 +115,26 @@ function Dashboard() {
   const statusFilter = searchParams.get('status') || '';
   const searchQuery = searchParams.get('q') || '';
   const groupingEnabled = searchParams.get('group') === '1';
+  const timeRange = searchParams.get('time') || '';
+  const sortBy = searchParams.get('sort') || '';
+  const sortDir = searchParams.get('dir') === 'asc' ? 'asc' : 'desc';
+
+  // Pinned requests (persisted in localStorage)
+  const [pinnedIds, setPinnedIds] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem('pinned-requests');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch { return new Set(); }
+  });
+
+  const togglePin = useCallback((id: string) => {
+    setPinnedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      localStorage.setItem('pinned-requests', JSON.stringify([...next]));
+      return next;
+    });
+  }, []);
 
   // Helper to update URL params (preserves other params)
   const updateParam = useCallback((key: string, value: string) => {
@@ -340,9 +360,29 @@ function Dashboard() {
     }
   };
 
-  // Filter logs client-side for search and status
+  // Filter, sort, and pin-prioritize logs
   const filteredLogs = useMemo(() => {
-    return logs.filter((log) => {
+    const now = Date.now();
+    const timeRangeMs: Record<string, number> = {
+      '5m': 5 * 60 * 1000,
+      '15m': 15 * 60 * 1000,
+      '1h': 60 * 60 * 1000,
+      'today': 0, // special: start of today
+    };
+
+    let result = logs.filter((log) => {
+      // Time range filter
+      if (timeRange && timeRange in timeRangeMs) {
+        const logTime = new Date(log.createdAt).getTime();
+        if (timeRange === 'today') {
+          const startOfDay = new Date();
+          startOfDay.setHours(0, 0, 0, 0);
+          if (logTime < startOfDay.getTime()) return false;
+        } else {
+          if (now - logTime > timeRangeMs[timeRange]) return false;
+        }
+      }
+
       // Status filter
       if (statusFilter) {
         const status = log.statusCode;
@@ -367,7 +407,43 @@ function Dashboard() {
 
       return true;
     });
-  }, [logs, statusFilter, searchQuery]);
+
+    // Sort (if a sort column is selected)
+    if (sortBy) {
+      result = [...result].sort((a, b) => {
+        let cmp = 0;
+        switch (sortBy) {
+          case 'status':
+            cmp = (a.statusCode || 0) - (b.statusCode || 0);
+            break;
+          case 'time':
+            cmp = (a.responseTime || 0) - (b.responseTime || 0);
+            break;
+          case 'method':
+            cmp = a.method.localeCompare(b.method);
+            break;
+          case 'path':
+            cmp = a.path.localeCompare(b.path);
+            break;
+          case 'timestamp':
+            cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+            break;
+        }
+        return sortDir === 'asc' ? cmp : -cmp;
+      });
+    }
+
+    // Pinned requests float to the top
+    if (pinnedIds.size > 0) {
+      result.sort((a, b) => {
+        const aPinned = pinnedIds.has(a.id) ? 1 : 0;
+        const bPinned = pinnedIds.has(b.id) ? 1 : 0;
+        return bPinned - aPinned; // pinned first
+      });
+    }
+
+    return result;
+  }, [logs, statusFilter, searchQuery, timeRange, sortBy, sortDir, pinnedIds]);
 
   // Assign group colors to consecutive logs that share the same host within a time window.
   // This creates subtle colored left-border stripes in the flat list - no collapsible rows.
@@ -558,6 +634,19 @@ function Dashboard() {
             </div>
           </div>
 
+          {/* Time Range */}
+          <select
+            value={timeRange}
+            onChange={(e) => updateParam('time', e.target.value)}
+            className="px-3 py-2 border border-[#30363d] rounded-md text-sm bg-[#0d1117] text-gray-300"
+          >
+            <option value="">All Time</option>
+            <option value="5m">Last 5 min</option>
+            <option value="15m">Last 15 min</option>
+            <option value="1h">Last hour</option>
+            <option value="today">Today</option>
+          </select>
+
           {/* Type Filter */}
           <select
             value={filter}
@@ -654,33 +743,51 @@ function Dashboard() {
           <table className="min-w-full divide-y divide-[#21262d]">
             <thead className="bg-[#161b22]">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider select-none">
-                  Method
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider select-none">
-                  Path
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider select-none">
-                  Target
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider select-none">
-                  Status
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider select-none">
-                  Time
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider select-none">
-                  AI
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider select-none">
-                  Timestamp
-                </th>
+                <th className="w-8 px-2 py-3" />
+                {[
+                  { key: 'method', label: 'Method' },
+                  { key: 'path', label: 'Path' },
+                  { key: '', label: 'Target' },
+                  { key: 'status', label: 'Status' },
+                  { key: 'time', label: 'Time' },
+                  { key: '', label: 'AI' },
+                  { key: 'timestamp', label: 'Timestamp' },
+                ].map(({ key, label }) => (
+                  <th
+                    key={label}
+                    className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider select-none ${
+                      key ? 'cursor-pointer hover:text-gray-300' : ''
+                    } ${key && sortBy === key ? 'text-[#58a6ff]' : 'text-gray-500'}`}
+                    onClick={key ? () => {
+                      if (sortBy === key) {
+                        updateParam('dir', sortDir === 'desc' ? 'asc' : 'desc');
+                      } else {
+                        setSearchParams(prev => {
+                          const next = new URLSearchParams(prev);
+                          next.set('sort', key);
+                          next.set('dir', 'desc');
+                          return next;
+                        });
+                      }
+                    } : undefined}
+                  >
+                    <span className="flex items-center gap-1">
+                      {label}
+                      {key && sortBy === key && (
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d={sortDir === 'asc' ? 'M5 15l7-7 7 7' : 'M19 9l-7 7-7-7'} />
+                        </svg>
+                      )}
+                    </span>
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody className="bg-[#0d1117] divide-y divide-[#21262d]">
               {filteredLogs.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center">
+                  <td colSpan={8} className="px-6 py-12 text-center">
                     {logs.length === 0 ? (
                       <>
                         <svg className="w-12 h-12 mx-auto text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -723,11 +830,26 @@ function Dashboard() {
                   return (
                     <tr
                       key={log.id}
-                      className={`relative hover:bg-[#1c2333] transition-colors ${
+                      className={`group relative hover:bg-[#1c2333] transition-colors ${
                         log.statusCode === null ? 'animate-pulse bg-[#1c2333]' : ''
-                      } ${lastViewedId === log.id ? 'bg-yellow-900/20 ring-1 ring-yellow-700/50' : ''} ${activeTabId === log.id ? 'bg-[#1c2333]' : ''}`}
+                      } ${lastViewedId === log.id ? 'bg-yellow-900/20 ring-1 ring-yellow-700/50' : ''} ${activeTabId === log.id ? 'bg-[#1c2333]' : ''} ${pinnedIds.has(log.id) ? 'bg-[#1c2333]/50' : ''}`}
                       style={groupColor ? { borderLeft: `3px solid ${groupColor}` } : undefined}
                     >
+                      <td className="w-8 px-2 py-3">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); togglePin(log.id); }}
+                          className={`relative z-10 p-0.5 rounded transition-colors ${
+                            pinnedIds.has(log.id)
+                              ? 'text-yellow-400'
+                              : 'text-gray-600 opacity-0 group-hover:opacity-100 hover:text-gray-400'
+                          }`}
+                          title={pinnedIds.has(log.id) ? 'Unpin request' : 'Pin request'}
+                        >
+                          <svg className="w-3.5 h-3.5" fill={pinnedIds.has(log.id) ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                          </svg>
+                        </button>
+                      </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span
                           className={`relative z-10 px-2 py-1 text-xs font-bold rounded ${getMethodColor(log.method)}`}
