@@ -2,8 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
+html, body {
   @apply bg-[#0d1117] text-gray-200;
+  overflow: hidden;
+  height: 100%;
+}
+
+#root {
+  height: 100%;
+  overflow: hidden;
 }
 
 /* Dark scrollbars */

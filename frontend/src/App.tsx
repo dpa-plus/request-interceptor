@@ -8,7 +8,7 @@ import Settings from './pages/Settings';
 
 function App() {
   return (
-    <div className="min-h-screen bg-[#0d1117] text-gray-200">
+    <div className="h-full bg-[#0d1117] text-gray-200 flex flex-col overflow-hidden">
       <Toaster
         position="top-right"
         toastOptions={{
@@ -24,14 +24,16 @@ function App() {
         }}
       />
       {/* Compact navbar - full width, no wasted space */}
-      <nav className="bg-[#161b22] border-b border-[#30363d] px-3">
-        <div className="flex items-center h-10 gap-4">
-          <span className="text-sm font-bold text-gray-300 mr-2">RI</span>
-          <div className="flex items-center gap-0.5">
+      <nav className="bg-[#161b22] border-b border-[#30363d]">
+        <div className="flex items-center justify-center h-11 gap-6 px-4">
+          <a href="https://dpa.plus" target="_blank" rel="noopener noreferrer" className="text-sm font-bold hover:opacity-80 transition-opacity flex-shrink-0" style={{ color: '#FF6100' }}>
+            DPA+
+          </a>
+          <div className="flex items-center gap-1">
             <NavLink
               to="/"
               className={({ isActive }) =>
-                `px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                   isActive ? 'bg-[#1f6feb33] text-[#58a6ff]' : 'text-gray-400 hover:text-gray-200 hover:bg-[#1c2333]'
                 }`
               }
@@ -41,7 +43,7 @@ function App() {
             <NavLink
               to="/ai"
               className={({ isActive }) =>
-                `px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                   isActive ? 'bg-[#8b5cf633] text-[#a78bfa]' : 'text-gray-400 hover:text-gray-200 hover:bg-[#1c2333]'
                 }`
               }
@@ -51,7 +53,7 @@ function App() {
             <NavLink
               to="/routing"
               className={({ isActive }) =>
-                `px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                   isActive ? 'bg-[#1f6feb33] text-[#58a6ff]' : 'text-gray-400 hover:text-gray-200 hover:bg-[#1c2333]'
                 }`
               }
@@ -61,7 +63,7 @@ function App() {
             <NavLink
               to="/settings"
               className={({ isActive }) =>
-                `px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                   isActive ? 'bg-[#1f6feb33] text-[#58a6ff]' : 'text-gray-400 hover:text-gray-200 hover:bg-[#1c2333]'
                 }`
               }
@@ -73,7 +75,7 @@ function App() {
       </nav>
 
       {/* Full width, no padding — pages control their own layout */}
-      <main>
+      <main className="flex-1 overflow-hidden">
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/ai" element={<AiDashboard />} />
