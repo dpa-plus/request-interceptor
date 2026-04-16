@@ -298,11 +298,27 @@ function Dashboard() {
         }
       }
 
-      const response = await fetch(`/api/logs?${params}`);
+      // Fetch filtered logs + pinned logs in parallel
+      const pinnedArray = [...pinnedIds];
+      const fetches: Promise<Response>[] = [fetch(`/api/logs?${params}`)];
+
+      // Fetch each pinned request individually (so they survive filters)
+      const pinnedFetches = pinnedArray.map(id =>
+        fetch(`/api/logs/${id}`).then(r => r.ok ? r.json() : null).catch(() => null)
+      );
+
+      const [response, ...pinnedResults] = await Promise.all([fetches[0], ...pinnedFetches]);
       if (!response.ok) throw new Error('Failed to fetch logs');
       const data: LogsResponse = await response.json();
-      setLogs(data.logs);
-      setTotal(data.total);
+
+      // Merge pinned requests that aren't already in the results
+      const resultIds = new Set(data.logs.map(l => l.id));
+      const pinnedLogs = pinnedResults
+        .filter((p): p is RequestLog => p !== null && !resultIds.has(p.id))
+        .map(p => ({ ...p, _pinned: true }));
+
+      setLogs([...pinnedLogs, ...data.logs]);
+      setTotal(data.total + pinnedLogs.length);
       setHasMore(data.logs.length < data.total);
       setError(null);
     } catch (err) {
@@ -310,7 +326,7 @@ function Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, [filter, methodFilter, statusFilter, searchQuery, timeRange]);
+  }, [filter, methodFilter, statusFilter, searchQuery, timeRange, pinnedIds]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
@@ -739,10 +755,10 @@ function Dashboard() {
                 {[
                   { key: 'method', label: 'Method' },
                   { key: 'path', label: 'Path' },
-                  { key: '', label: 'Model' },
+                  { key: '', label: 'Target' },
                   { key: 'status', label: 'Status' },
                   { key: 'time', label: 'Time' },
-                  { key: '', label: 'Cost' },
+                  { key: '', label: 'AI Details' },
                   { key: 'timestamp', label: 'Timestamp' },
                 ].map(({ key, label }) => (
                   <th
@@ -864,16 +880,8 @@ function Dashboard() {
                           {log.path}
                         </Link>
                       </td>
-                      <td className="px-4 py-3 text-sm max-w-[180px] truncate">
-                        {log.isAiRequest && log.aiRequest?.model ? (
-                          <span className="text-purple-300 font-medium" title={log.aiRequest.model}>
-                            {log.aiRequest.model.replace(/^.*\//, '')}
-                          </span>
-                        ) : (
-                          <span className="text-gray-600 text-xs truncate" title={log.targetUrl}>
-                            {(() => { try { return new URL(log.targetUrl).hostname; } catch { return '-'; } })()}
-                          </span>
-                        )}
+                      <td className="px-4 py-3 text-sm text-gray-500 max-w-[160px] truncate" title={log.targetUrl}>
+                        {(() => { try { return new URL(log.targetUrl).hostname; } catch { return log.targetUrl || '-'; } })()}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         {log.statusCode === null ? (
@@ -896,17 +904,23 @@ function Dashboard() {
                           </span>
                         ) : '-'}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm">
-                        {log.aiRequest?.totalCostMicros ? (
-                          <span className="text-green-400 font-medium">
-                            ${(log.aiRequest.totalCostMicros / 1_000_000).toFixed(4)}
-                          </span>
-                        ) : log.aiRequest?.totalTokens ? (
-                          <span className="text-gray-400 text-xs">
-                            {log.aiRequest.totalTokens.toLocaleString()} tok
-                          </span>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {log.isAiRequest && log.aiRequest ? (
+                          <div className="flex flex-col gap-0.5 max-w-[200px]">
+                            <span className="text-xs font-medium text-purple-300 truncate" title={log.aiRequest.model || ''}>
+                              {(log.aiRequest.model || log.aiRequest.provider || 'AI').replace(/^.*\//, '')}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {log.aiRequest.totalTokens?.toLocaleString() || '?'} tokens
+                              {log.aiRequest.totalCostMicros
+                                ? ` · $${(log.aiRequest.totalCostMicros / 1_000_000).toFixed(4)}`
+                                : ''}
+                            </span>
+                          </div>
+                        ) : log.isAiRequest ? (
+                          <span className="text-xs text-purple-400">AI</span>
                         ) : (
-                          <span className="text-gray-600">-</span>
+                          <span className="text-gray-700">-</span>
                         )}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
