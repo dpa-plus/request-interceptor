@@ -666,14 +666,15 @@ function Dashboard() {
 
         {/* Column headers (only in full-width mode) */}
         {!showRightPane && (
-          <div className="flex items-center gap-3 px-2 py-1.5 border-b border-[#21262d] text-[11px] font-semibold text-gray-400 uppercase tracking-wide select-none bg-[#161b22]">
-            <span className="w-3 flex-shrink-0" />
-            <span className="w-11 flex-shrink-0">Method</span>
-            <span className="w-8 flex-shrink-0">Status</span>
-            <span className="flex-1 pl-3">Path</span>
-            <span className="w-16 text-right flex-shrink-0">Time</span>
-            <span className="w-10 text-right flex-shrink-0">AI</span>
-            <span className="w-16 text-right flex-shrink-0">When</span>
+          <div className="grid border-b border-[#21262d] text-[12px] font-bold text-gray-400 uppercase tracking-wider select-none bg-[#161b22] px-2 py-2"
+            style={{ gridTemplateColumns: '20px 60px 44px 1fr 70px 44px 70px', gap: '0 12px' }}>
+            <span />
+            <span>Method</span>
+            <span>Status</span>
+            <span>Path</span>
+            <span className="text-right">Time</span>
+            <span className="text-right">AI</span>
+            <span className="text-right">When</span>
           </div>
         )}
 
@@ -691,32 +692,37 @@ function Dashboard() {
               const ts = new Date(log.createdAt);
               const isToday = ts.toDateString() === new Date().toDateString();
               const timeStr = isToday ? ts.toLocaleTimeString() : `${ts.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })} ${ts.toLocaleTimeString()}`;
+              const rowStyle: React.CSSProperties = {
+                gridTemplateColumns: '20px 60px 44px 1fr 70px 44px 70px',
+                columnGap: '12px',
+                ...(groupColor && !isActive ? { borderLeftColor: groupColor } : {}),
+              };
               return (
                 <div
                   key={log.id}
-                  className={`group flex items-center gap-3 px-2 py-2.5 cursor-pointer transition-colors text-[13px] ${
+                  className={`group grid items-center px-2 py-2.5 cursor-pointer transition-colors text-[13px] ${
                     isActive ? 'bg-[#1f6feb15] border-l-2 border-l-[#58a6ff]' : 'hover:bg-[#1c2333] border-l-2 border-l-transparent'
                   } ${pinnedIds.has(log.id) ? 'bg-[#1c2333]/30' : ''}`}
-                  style={groupColor && !isActive ? { borderLeftColor: groupColor } : undefined}
+                  style={rowStyle}
                   onClick={() => openRequestTab(log.id, `${log.method} ${log.path}`)}
                 >
                   <button
                     onClick={(e) => { e.stopPropagation(); togglePin(log.id); }}
-                    className={`flex-shrink-0 ${pinnedIds.has(log.id) ? 'text-yellow-400' : 'text-gray-700 opacity-0 group-hover:opacity-100'}`}
+                    className={`text-center ${pinnedIds.has(log.id) ? 'text-yellow-400' : 'text-gray-700 opacity-0 group-hover:opacity-100'}`}
                   >★</button>
-                  <span className={`px-1.5 py-0.5 text-[11px] font-bold rounded flex-shrink-0 ${getMethodColor(log.method)}`}>
+                  <span className={`px-1.5 py-0.5 text-[11px] font-bold rounded text-center ${getMethodColor(log.method)}`}>
                     {log.method}
                   </span>
-                  <span className={`font-bold flex-shrink-0 w-8 text-center ${getStatusColor(log.statusCode)}`}>
+                  <span className={`font-bold ${getStatusColor(log.statusCode)}`}>
                     {log.statusCode || '...'}
                   </span>
-                  <span className="text-gray-300 font-mono truncate flex-1 min-w-0 pl-3">{log.path}</span>
-                  <span className={`flex-shrink-0 w-16 text-right ${
+                  <span className="text-gray-300 font-mono truncate min-w-0">{log.path}</span>
+                  <span className={`text-right ${
                     (log.responseTime || 0) > 1000 ? 'text-orange-400' : 'text-gray-500'
                   }`}>
                     {log.responseTime ? `${log.responseTime}ms` : ''}
                   </span>
-                  <span className="flex-shrink-0 w-10 text-right">
+                  <span className="text-right">
                     {log.isAiRequest && log.aiRequest ? (
                       <span className="px-1.5 py-0.5 rounded bg-purple-900/40 text-purple-300 text-[11px] truncate">
                         {(log.aiRequest.model || 'AI').replace(/^.*\//, '').slice(0, 8)}
@@ -725,7 +731,7 @@ function Dashboard() {
                       <span className="px-1.5 py-0.5 rounded bg-purple-900/40 text-purple-300 text-[11px]">AI</span>
                     ) : null}
                   </span>
-                  <span className="flex-shrink-0 text-gray-500 text-[11px] w-16 text-right">{timeStr.split(' ').pop()}</span>
+                  <span className="text-gray-500 text-[11px] text-right">{timeStr.split(' ').pop()}</span>
                 </div>
               );
             })}

@@ -126,7 +126,7 @@ function AiDashboard() {
   }
 
   return (
-    <div>
+    <div className="max-w-7xl mx-auto px-6 py-4 overflow-auto h-[calc(100vh-44px)]">
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-100">AI Dashboard</h1>

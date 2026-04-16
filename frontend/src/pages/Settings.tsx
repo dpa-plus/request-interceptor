@@ -109,7 +109,7 @@ function Settings() {
   }
 
   return (
-    <div className="max-w-4xl">
+    <div className="max-w-7xl mx-auto px-6 py-4 overflow-auto h-[calc(100vh-44px)]">
       <h1 className="text-2xl font-bold text-gray-100 mb-6">Settings</h1>
 
       {error && (
