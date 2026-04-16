@@ -37,7 +37,7 @@ export interface OpenRouterEnrichedEvent {
 export function initSocketServer(httpServer: HttpServer): SocketIOServer {
   io = new SocketIOServer(httpServer, {
     cors: {
-      origin: process.env.ADMIN_CORS_ORIGIN || true, // true = same origin; set ADMIN_CORS_ORIGIN for specific origins
+      origin: process.env.ADMIN_CORS_ORIGIN || false, // false = same-origin only; set ADMIN_CORS_ORIGIN to allow specific cross-origin frontends
       methods: ['GET', 'POST'],
     },
     path: '/socket.io',

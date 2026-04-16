@@ -6,6 +6,7 @@ import { prisma } from './lib/prisma.js';
 import { adminAuth, rateLimiter } from './middleware/adminAuth.js';
 import { getModelInfo as getOpenRouterModelInfo, getAllModels, getCacheStats as getOpenRouterCacheStats, refreshCache as refreshOpenRouterCache } from './lib/openRouterModels.js';
 import { getModelInfo, getContextLength } from './lib/modelInfoService.js';
+import { invalidateRoutingCache } from './lib/routing.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -768,6 +769,7 @@ export function createAdminApp() {
         },
       });
 
+      invalidateRoutingCache(); // Ensure proxy sees the new rule immediately
       res.status(201).json(rule);
     } catch (error) {
       console.error('Error creating routing rule:', error);
@@ -803,6 +805,7 @@ export function createAdminApp() {
         },
       });
 
+      invalidateRoutingCache(); // Ensure proxy sees the updated rule immediately
       res.json(rule);
     } catch (error) {
       console.error('Error updating routing rule:', error);
@@ -816,6 +819,7 @@ export function createAdminApp() {
       await prisma.routingRule.delete({
         where: { id: req.params.id },
       });
+      invalidateRoutingCache(); // Ensure proxy stops using the deleted rule immediately
       res.json({ success: true });
     } catch (error) {
       console.error('Error deleting routing rule:', error);
@@ -858,6 +862,7 @@ export function createAdminApp() {
         },
       });
 
+      invalidateRoutingCache(); // Ensure proxy sees the new default target URL immediately
       res.json(config);
     } catch (error) {
       console.error('Error updating config:', error);
