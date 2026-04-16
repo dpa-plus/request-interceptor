@@ -54,8 +54,7 @@ function Dashboard() {
   // Tab system - open request details as tabs below the list
   const [openTabs, setOpenTabs] = useState<{ id: string; label: string }[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
-
-
+  const [panelVisible, setPanelVisible] = useState(true);
 
   const openRequestTab = useCallback((id: string, label: string) => {
     setOpenTabs(prev => {
@@ -63,6 +62,7 @@ function Dashboard() {
       return [...prev, { id, label }];
     });
     setActiveTabId(id);
+    setPanelVisible(true);
   }, []);
 
   const closeTab = useCallback((id: string) => {
@@ -464,7 +464,7 @@ function Dashboard() {
 
 
   // Left-right split resize
-  const [sidebarWidth, setSidebarWidth] = useState(420);
+  const [sidebarWidth, setSidebarWidth] = useState(560);
   const startSidebarResize = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     const startX = e.clientX;
@@ -499,73 +499,77 @@ function Dashboard() {
     );
   }
 
-  return (
-    <div className="flex h-[calc(100vh-56px)] overflow-hidden -mx-4 sm:-mx-6 lg:-mx-8 -my-6">
-      {/* ====== LEFT: Request List ====== */}
-      <div style={{ width: openTabs.length > 0 ? sidebarWidth : undefined }} className={`${openTabs.length > 0 ? 'flex-shrink-0' : 'flex-1'} flex flex-col border-r border-[#30363d] bg-[#0d1117]`}>
-        {/* Header */}
-      <div className="flex justify-between items-center px-4 py-3 border-b border-[#21262d]">
-        <div className="flex items-center gap-3">
-          <h1 className="text-lg font-bold text-gray-200">Request Logs</h1>
-          <span
-            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
-              connected
-                ? 'bg-green-900/40 text-green-400'
-                : 'bg-gray-800 text-gray-500'
-            }`}
-          >
-            <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`} />
-            {connected ? 'Live' : 'Offline'}
-          </span>
-          <span className="text-xs text-gray-600">{total.toLocaleString()}</span>
-        </div>
-        <div className="flex gap-1.5">
-          {/* Pause/Resume live updates */}
-          <button
-            onClick={() => setPaused(!paused)}
-            className={`p-2 border rounded-md ${
-              paused
-                ? 'bg-yellow-900/30 border-yellow-700 text-yellow-400'
-                : 'bg-[#21262d] border-[#30363d] text-gray-400 hover:bg-[#30363d] hover:text-gray-200'
-            }`}
-            title={paused ? 'Resume live updates' : 'Pause live updates'}
-          >
-            {paused ? (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-              </svg>
-            ) : (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6" />
-              </svg>
-            )}
-          </button>
-          <button
-            onClick={() => fetchLogs()}
-            className="p-2 bg-[#21262d] border border-[#30363d] rounded-md text-gray-400 hover:bg-[#30363d] hover:text-gray-200"
-            title="Refresh"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-          </button>
-          <button
-            onClick={() => setDeleteConfirm(true)}
-            className="px-3 py-2 bg-red-600 rounded-md text-sm font-medium text-white hover:bg-red-700 flex items-center gap-1"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-            Clear
-          </button>
-        </div>
-      </div>
+  const showRightPane = openTabs.length > 0 && panelVisible;
 
-      {/* Filters */}
-      <div className="px-3 py-2 border-b border-[#21262d] space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Search */}
-          <div className="flex-1 min-w-[120px]">
+  return (
+    <div className="relative flex h-[calc(100vh-56px)] overflow-hidden -mx-4 sm:-mx-6 lg:-mx-8 -my-6">
+      {/* ====== LEFT: Sidebar (Request List) ====== */}
+      <div
+        style={{ width: showRightPane ? sidebarWidth : undefined }}
+        className={`${showRightPane ? 'flex-shrink-0' : 'flex-1'} flex flex-col border-r border-[#30363d] bg-[#0d1117]`}
+      >
+        {/* Header */}
+        <div className="flex justify-between items-center px-4 py-3 border-b border-[#21262d]">
+          <div className="flex items-center gap-3">
+            <h1 className="text-lg font-bold text-gray-200">Request Logs</h1>
+            <span
+              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+                connected
+                  ? 'bg-green-900/40 text-green-400'
+                  : 'bg-gray-800 text-gray-500'
+              }`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`} />
+              {connected ? 'Live' : 'Offline'}
+            </span>
+            <span className="text-xs text-gray-600">{total.toLocaleString()}</span>
+          </div>
+          <div className="flex gap-1.5">
+            {/* Pause/Resume live updates */}
+            <button
+              onClick={() => setPaused(!paused)}
+              className={`p-2 border rounded-md ${
+                paused
+                  ? 'bg-yellow-900/30 border-yellow-700 text-yellow-400'
+                  : 'bg-[#21262d] border-[#30363d] text-gray-400 hover:bg-[#30363d] hover:text-gray-200'
+              }`}
+              title={paused ? 'Resume live updates' : 'Pause live updates'}
+            >
+              {paused ? (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6" />
+                </svg>
+              )}
+            </button>
+            <button
+              onClick={() => fetchLogs()}
+              className="p-2 bg-[#21262d] border border-[#30363d] rounded-md text-gray-400 hover:bg-[#30363d] hover:text-gray-200"
+              title="Refresh"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
+            <button
+              onClick={() => setDeleteConfirm(true)}
+              className="px-3 py-2 bg-red-600 rounded-md text-sm font-medium text-white hover:bg-red-700 flex items-center gap-1"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              Clear
+            </button>
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div className="px-3 py-2 border-b border-[#21262d]">
+          {/* Search - full width */}
+          <div className="mb-2">
             <div className="relative">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -589,276 +593,294 @@ function Dashboard() {
               )}
             </div>
           </div>
-
-          {/* Time Range */}
-          <select
-            value={timeRange.includes(',') ? 'custom' : timeRange}
-            onChange={(e) => {
-              if (e.target.value === 'custom') {
-                // Default custom range: last 24 hours
-                const now = new Date();
-                const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-                updateParam('time', `${yesterday.toISOString()},${now.toISOString()}`);
-              } else {
-                updateParam('time', e.target.value);
-              }
-            }}
-            className="px-3 py-2 border border-[#30363d] rounded-md text-sm bg-[#0d1117] text-gray-300"
-          >
-            <option value="">All Time</option>
-            <option value="5m">Last 5 min</option>
-            <option value="15m">Last 15 min</option>
-            <option value="1h">Last hour</option>
-            <option value="today">Today</option>
-            <option value="custom">Custom range...</option>
-          </select>
-          {timeRange.includes(',') && (
-            <div className="flex items-center gap-1">
-              <input
-                type="datetime-local"
-                value={timeRange.split(',')[0]?.slice(0, 16) || ''}
-                onChange={(e) => {
-                  const to = timeRange.split(',')[1] || new Date().toISOString();
-                  updateParam('time', `${new Date(e.target.value).toISOString()},${to}`);
-                }}
-                className="px-2 py-1.5 border border-[#30363d] rounded text-xs bg-[#0d1117] text-gray-300"
-              />
-              <span className="text-gray-500 text-xs">to</span>
-              <input
-                type="datetime-local"
-                value={timeRange.split(',')[1]?.slice(0, 16) || ''}
-                onChange={(e) => {
-                  const from = timeRange.split(',')[0] || '';
-                  updateParam('time', `${from},${new Date(e.target.value).toISOString()}`);
-                }}
-                className="px-2 py-1.5 border border-[#30363d] rounded text-xs bg-[#0d1117] text-gray-300"
-              />
-            </div>
-          )}
-
-          {/* Type Filter */}
-          <select
-            value={filter}
-            onChange={(e) => setFilter(e.target.value as 'all' | 'ai' | 'regular')}
-            className="px-3 py-2 border border-[#30363d] rounded-md text-sm bg-[#0d1117] text-gray-300"
-          >
-            <option value="all">All Types</option>
-            <option value="ai">AI Only</option>
-            <option value="regular">Regular Only</option>
-          </select>
-
-          {/* Method Filter */}
-          <select
-            value={methodFilter}
-            onChange={(e) => setMethodFilter(e.target.value)}
-            className="px-3 py-2 border border-[#30363d] rounded-md text-sm bg-[#0d1117] text-gray-300"
-          >
-            <option value="">All Methods</option>
-            <option value="GET">GET</option>
-            <option value="POST">POST</option>
-            <option value="PUT">PUT</option>
-            <option value="PATCH">PATCH</option>
-            <option value="DELETE">DELETE</option>
-          </select>
-
-          {/* Status Filter */}
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 border border-[#30363d] rounded-md text-sm bg-[#0d1117] text-gray-300"
-          >
-            <option value="">All Status</option>
-            <option value="2xx">2xx Success</option>
-            <option value="3xx">3xx Redirect</option>
-            <option value="4xx">4xx Client Error</option>
-            <option value="5xx">5xx Server Error</option>
-          </select>
-
-          {/* Errors only toggle */}
-          <button
-            onClick={() => setStatusFilter(statusFilter === 'errors' ? '' : 'errors')}
-            className={`px-3 py-2 border rounded-md text-sm font-medium ${
-              statusFilter === 'errors'
-                ? 'bg-red-900/30 border-red-700 text-red-400'
-                : 'border-[#30363d] text-gray-400 hover:bg-[#1c2333]'
-            }`}
-            title="Show only 4xx and 5xx errors"
-          >
-            Errors
-          </button>
-
-          {/* Group toggle */}
-          <button
-            onClick={() => updateParam('group', groupingEnabled ? '' : '1')}
-            className={`px-3 py-2 border rounded-md text-sm font-medium flex items-center gap-1.5 ${
-              groupingEnabled
-                ? 'bg-[#1f6feb33] border-[#1f6feb] text-[#58a6ff]'
-                : 'border-[#30363d] text-gray-400 hover:bg-[#1c2333]'
-            }`}
-            title="Group related requests by target host"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-            </svg>
-            {groupingEnabled ? 'Grouped by model' : 'Group by model'}
-          </button>
-
-          {/* Clear filters */}
-          {(searchQuery || filter !== 'all' || methodFilter || statusFilter) && (
-            <button
-              onClick={() => setSearchParams(new URLSearchParams())}
-              className="px-3 py-2 text-sm text-gray-400 hover:text-gray-100"
+          {/* Filter row - wraps gracefully at narrow widths */}
+          <div className="flex flex-wrap gap-1.5 items-center">
+            {/* Time Range */}
+            <select
+              value={timeRange.includes(',') ? 'custom' : timeRange}
+              onChange={(e) => {
+                if (e.target.value === 'custom') {
+                  // Default custom range: last 24 hours
+                  const now = new Date();
+                  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+                  updateParam('time', `${yesterday.toISOString()},${now.toISOString()}`);
+                } else {
+                  updateParam('time', e.target.value);
+                }
+              }}
+              className="flex-1 min-w-0 px-2 py-1.5 border border-[#30363d] rounded text-xs bg-[#0d1117] text-gray-300"
             >
-              Clear filters
-            </button>
-          )}
-        </div>
-      </div>
-
-      {error && (
-        <div className="mb-4 p-4 bg-red-900/20 border border-red-800/50 rounded-md text-red-700 flex items-center justify-between">
-          <span>{error}</span>
-          <button onClick={() => setError(null)} className="text-red-500 hover:text-red-700">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      )}
-
-      {/* Compact request list */}
-      <div className="flex-1 overflow-auto">
-        <div className="divide-y divide-[#21262d]">
-          {filteredLogs.length === 0 && !loading && (
-            <div className="p-6 text-center text-gray-500 text-sm">
-              {logs.length === 0 ? 'No requests logged yet' : 'No requests match your filters'}
-            </div>
-          )}
-          {filteredLogs.map((log) => {
-            const groupColor = logGroupColors.get(log.id);
-            const isActive = activeTabId === log.id;
-            const ts = new Date(log.createdAt);
-            const isToday = ts.toDateString() === new Date().toDateString();
-            const timeStr = isToday ? ts.toLocaleTimeString() : `${ts.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })} ${ts.toLocaleTimeString()}`;
-            return (
-              <div
-                key={log.id}
-                className={`group flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors text-xs ${
-                  isActive ? 'bg-[#1f6feb15] border-l-2 border-l-[#58a6ff]' : 'hover:bg-[#1c2333] border-l-2 border-l-transparent'
-                } ${pinnedIds.has(log.id) ? 'bg-[#1c2333]/30' : ''}`}
-                style={groupColor && !isActive ? { borderLeftColor: groupColor } : undefined}
-                onClick={() => openRequestTab(log.id, `${log.method} ${log.path}`)}
-              >
-                <button
-                  onClick={(e) => { e.stopPropagation(); togglePin(log.id); }}
-                  className={`flex-shrink-0 ${pinnedIds.has(log.id) ? 'text-yellow-400' : 'text-gray-700 opacity-0 group-hover:opacity-100'}`}
-                >★</button>
-                <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded flex-shrink-0 ${getMethodColor(log.method)}`}>
-                  {log.method}
-                </span>
-                <span className={`font-bold flex-shrink-0 w-7 text-center ${getStatusColor(log.statusCode)}`}>
-                  {log.statusCode || '...'}
-                </span>
-                <span className="text-gray-300 font-mono truncate flex-1 min-w-0">{log.path}</span>
-                <span className={`flex-shrink-0 w-14 text-right ${
-                  (log.responseTime || 0) > 1000 ? 'text-orange-400' : 'text-gray-500'
-                }`}>
-                  {log.responseTime ? `${log.responseTime}ms` : ''}
-                </span>
-                {log.isAiRequest && log.aiRequest ? (
-                  <span className="flex-shrink-0 px-1.5 py-0.5 rounded bg-purple-900/40 text-purple-300 text-[10px] truncate max-w-[100px]">
-                    {(log.aiRequest.model || 'AI').replace(/^.*\//, '')}
-                  </span>
-                ) : log.isAiRequest ? (
-                  <span className="flex-shrink-0 px-1 py-0.5 rounded bg-purple-900/40 text-purple-300 text-[10px]">AI</span>
-                ) : null}
-                <span className="flex-shrink-0 text-gray-600 text-[10px] w-14 text-right">{timeStr.split(' ').pop()}</span>
+              <option value="">All Time</option>
+              <option value="5m">Last 5 min</option>
+              <option value="15m">Last 15 min</option>
+              <option value="1h">Last hour</option>
+              <option value="today">Today</option>
+              <option value="custom">Custom range...</option>
+            </select>
+            {timeRange.includes(',') && (
+              <div className="flex items-center gap-1">
+                <input
+                  type="datetime-local"
+                  value={timeRange.split(',')[0]?.slice(0, 16) || ''}
+                  onChange={(e) => {
+                    const to = timeRange.split(',')[1] || new Date().toISOString();
+                    updateParam('time', `${new Date(e.target.value).toISOString()},${to}`);
+                  }}
+                  className="px-2 py-1.5 border border-[#30363d] rounded text-xs bg-[#0d1117] text-gray-300"
+                />
+                <span className="text-gray-500 text-xs">to</span>
+                <input
+                  type="datetime-local"
+                  value={timeRange.split(',')[1]?.slice(0, 16) || ''}
+                  onChange={(e) => {
+                    const from = timeRange.split(',')[0] || '';
+                    updateParam('time', `${from},${new Date(e.target.value).toISOString()}`);
+                  }}
+                  className="px-2 py-1.5 border border-[#30363d] rounded text-xs bg-[#0d1117] text-gray-300"
+                />
               </div>
-            );
-          })}
-          <div ref={loadMoreRef} className="py-3 flex justify-center">
-            {loadingMore && <span className="text-xs text-gray-500">Loading more...</span>}
-            {!hasMore && logs.length > 0 && (
-              <span className="text-[10px] text-gray-600">{total.toLocaleString()} requests</span>
+            )}
+
+            {/* Type Filter */}
+            <select
+              value={filter}
+              onChange={(e) => setFilter(e.target.value as 'all' | 'ai' | 'regular')}
+              className="flex-1 min-w-0 px-2 py-1.5 border border-[#30363d] rounded text-xs bg-[#0d1117] text-gray-300"
+            >
+              <option value="all">All Types</option>
+              <option value="ai">AI Only</option>
+              <option value="regular">Regular Only</option>
+            </select>
+
+            {/* Method Filter */}
+            <select
+              value={methodFilter}
+              onChange={(e) => setMethodFilter(e.target.value)}
+              className="flex-1 min-w-0 px-2 py-1.5 border border-[#30363d] rounded text-xs bg-[#0d1117] text-gray-300"
+            >
+              <option value="">All Methods</option>
+              <option value="GET">GET</option>
+              <option value="POST">POST</option>
+              <option value="PUT">PUT</option>
+              <option value="PATCH">PATCH</option>
+              <option value="DELETE">DELETE</option>
+            </select>
+
+            {/* Status Filter */}
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="flex-1 min-w-0 px-2 py-1.5 border border-[#30363d] rounded text-xs bg-[#0d1117] text-gray-300"
+            >
+              <option value="">All Status</option>
+              <option value="2xx">2xx Success</option>
+              <option value="3xx">3xx Redirect</option>
+              <option value="4xx">4xx Client Error</option>
+              <option value="5xx">5xx Server Error</option>
+            </select>
+
+            {/* Errors toggle */}
+            <button
+              onClick={() => setStatusFilter(statusFilter === 'errors' ? '' : 'errors')}
+              className={`px-2 py-1.5 border rounded text-xs font-medium ${
+                statusFilter === 'errors'
+                  ? 'bg-red-900/30 border-red-700 text-red-400'
+                  : 'border-[#30363d] text-gray-400 hover:bg-[#1c2333]'
+              }`}
+            >
+              Errors
+            </button>
+            {/* Clear */}
+            {(searchQuery || filter !== 'all' || methodFilter || statusFilter || timeRange) && (
+              <button
+                onClick={() => setSearchParams(new URLSearchParams())}
+                className="px-2 py-1.5 text-xs text-gray-500 hover:text-gray-200"
+              >
+                Clear
+              </button>
             )}
           </div>
         </div>
-      </div>
-    </div>
 
-
-
-    {/* ====== RIGHT PANE: Detail View (only when tabs are open) ====== */}
-    {openTabs.length > 0 && (
-      <>
-        {/* Resize handle */}
-        <div
-          onMouseDown={startSidebarResize}
-          className="w-1 cursor-col-resize bg-[#30363d] hover:bg-[#58a6ff] transition-colors flex-shrink-0"
-        />
-        <div className="flex-1 flex flex-col bg-[#0d1117] min-w-0">
-          {/* Tab bar */}
-          <div className="flex items-center bg-[#161b22] border-b border-[#21262d] overflow-x-auto flex-shrink-0">
-            {openTabs.map((tab) => (
-              <div
-                key={tab.id}
-                className={`group flex items-center gap-1.5 px-3 py-2 text-xs font-medium cursor-pointer border-r border-[#21262d] shrink-0 max-w-[220px] ${
-                  activeTabId === tab.id
-                    ? 'bg-[#0d1117] text-gray-200 border-b-2 border-b-[#58a6ff]'
-                    : 'text-gray-500 hover:text-gray-300 hover:bg-[#1c2333]'
-                }`}
-                onClick={() => setActiveTabId(tab.id)}
-              >
-                <span className="truncate">{tab.label}</span>
-                <button
-                  onClick={(e) => { e.stopPropagation(); closeTab(tab.id); }}
-                  className="ml-1 p-0.5 rounded hover:bg-[#30363d] text-gray-600 hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            ))}
-            <button
-              onClick={() => { setOpenTabs([]); setActiveTabId(null); }}
-              className="ml-auto px-3 py-2 text-xs text-gray-500 hover:text-gray-300 shrink-0"
-            >
-              Close all
+        {error && (
+          <div className="mx-3 mt-2 p-3 bg-red-900/20 border border-red-800/50 rounded-md text-red-400 text-sm flex items-center justify-between">
+            <span>{error}</span>
+            <button onClick={() => setError(null)} className="text-red-500 hover:text-red-300">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           </div>
-          {/* Detail content */}
-          <div className="flex-1 overflow-hidden">
-            {activeTabId && <RequestDetailPanel requestId={activeTabId} />}
-          </div>
-        </div>
-      </>
-    )}
+        )}
 
-    {/* Delete Confirmation Modal - keep it outside the layout */}
-    {deleteConfirm && (
-      <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50">
-        <div className="bg-[#161b22] border border-[#30363d] rounded-lg max-w-md w-full p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-900/40 flex items-center justify-center">
-              <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-            </div>
-            <div>
-              <h3 className="text-lg font-medium text-gray-100">Clear All Logs</h3>
-              <p className="text-sm text-gray-500">Delete all {total.toLocaleString()} requests? This cannot be undone.</p>
-            </div>
+        {/* Column headers (only in full-width mode) */}
+        {!showRightPane && (
+          <div className="flex items-center gap-2 px-3 py-1.5 border-b border-[#21262d] text-[10px] text-gray-600 uppercase tracking-wider select-none bg-[#161b22]">
+            <span className="w-3 flex-shrink-0" />
+            <span className="flex-shrink-0" style={{ width: 50 }}>Method</span>
+            <span className="flex-shrink-0 w-7 text-center">Status</span>
+            <span className="flex-1 min-w-0">Path</span>
+            <span className="flex-shrink-0 w-14 text-right">Time</span>
+            <span className="flex-shrink-0 w-12 text-right">AI</span>
+            <span className="flex-shrink-0 w-14 text-right">When</span>
           </div>
-          <div className="flex gap-3 justify-end">
-            <button onClick={() => setDeleteConfirm(false)} className="px-4 py-2 border border-[#30363d] rounded-md text-sm text-gray-300 hover:bg-[#1c2333]">Cancel</button>
-            <button onClick={clearLogs} className="px-4 py-2 bg-red-600 rounded-md text-sm text-white hover:bg-red-700">Delete All</button>
+        )}
+
+        {/* Request list */}
+        <div className="flex-1 overflow-auto">
+          <div className="divide-y divide-[#21262d]">
+            {filteredLogs.length === 0 && !loading && (
+              <div className="p-6 text-center text-gray-500 text-sm">
+                {logs.length === 0 ? 'No requests logged yet' : 'No requests match your filters'}
+              </div>
+            )}
+            {filteredLogs.map((log) => {
+              const groupColor = logGroupColors.get(log.id);
+              const isActive = activeTabId === log.id;
+              const ts = new Date(log.createdAt);
+              const isToday = ts.toDateString() === new Date().toDateString();
+              const timeStr = isToday ? ts.toLocaleTimeString() : `${ts.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })} ${ts.toLocaleTimeString()}`;
+              return (
+                <div
+                  key={log.id}
+                  className={`group flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors text-xs ${
+                    isActive ? 'bg-[#1f6feb15] border-l-2 border-l-[#58a6ff]' : 'hover:bg-[#1c2333] border-l-2 border-l-transparent'
+                  } ${pinnedIds.has(log.id) ? 'bg-[#1c2333]/30' : ''}`}
+                  style={groupColor && !isActive ? { borderLeftColor: groupColor } : undefined}
+                  onClick={() => openRequestTab(log.id, `${log.method} ${log.path}`)}
+                >
+                  <button
+                    onClick={(e) => { e.stopPropagation(); togglePin(log.id); }}
+                    className={`flex-shrink-0 ${pinnedIds.has(log.id) ? 'text-yellow-400' : 'text-gray-700 opacity-0 group-hover:opacity-100'}`}
+                  >★</button>
+                  <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded flex-shrink-0 ${getMethodColor(log.method)}`}>
+                    {log.method}
+                  </span>
+                  <span className={`font-bold flex-shrink-0 w-7 text-center ${getStatusColor(log.statusCode)}`}>
+                    {log.statusCode || '...'}
+                  </span>
+                  <span className="text-gray-300 font-mono truncate flex-1 min-w-0">{log.path}</span>
+                  <span className={`flex-shrink-0 w-14 text-right ${
+                    (log.responseTime || 0) > 1000 ? 'text-orange-400' : 'text-gray-500'
+                  }`}>
+                    {log.responseTime ? `${log.responseTime}ms` : ''}
+                  </span>
+                  {log.isAiRequest && log.aiRequest ? (
+                    <span className="flex-shrink-0 px-1.5 py-0.5 rounded bg-purple-900/40 text-purple-300 text-[10px] truncate max-w-[100px]">
+                      {(log.aiRequest.model || 'AI').replace(/^.*\//, '')}
+                    </span>
+                  ) : log.isAiRequest ? (
+                    <span className="flex-shrink-0 px-1 py-0.5 rounded bg-purple-900/40 text-purple-300 text-[10px]">AI</span>
+                  ) : null}
+                  <span className="flex-shrink-0 text-gray-600 text-[10px] w-14 text-right">{timeStr.split(' ').pop()}</span>
+                </div>
+              );
+            })}
+            <div ref={loadMoreRef} className="py-3 flex justify-center">
+              {loadingMore && <span className="text-xs text-gray-500">Loading more...</span>}
+              {!hasMore && logs.length > 0 && (
+                <span className="text-[10px] text-gray-600">{total.toLocaleString()} requests</span>
+              )}
+            </div>
           </div>
         </div>
+
+        {/* Reopen panel button - shown when tabs exist but panel is hidden */}
+        {openTabs.length > 0 && !panelVisible && (
+          <div className="flex-shrink-0 border-t border-[#21262d] px-3 py-2">
+            <button
+              onClick={() => setPanelVisible(true)}
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 hover:text-gray-200 bg-[#161b22] hover:bg-[#1c2333] border border-[#30363d] rounded-md transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+              Show {openTabs.length} open {openTabs.length === 1 ? 'tab' : 'tabs'}
+            </button>
+          </div>
+        )}
       </div>
-    )}
-  </div>
-);
+      {/* end sidebar */}
+
+      {showRightPane && (
+        <>
+          {/* Resize handle */}
+          <div
+            onMouseDown={startSidebarResize}
+            className="w-1 cursor-col-resize bg-[#30363d] hover:bg-[#58a6ff] transition-colors flex-shrink-0"
+          />
+          <div className="flex-1 flex flex-col bg-[#0d1117] min-w-0">
+            {/* Tab bar */}
+            <div className="flex items-center bg-[#161b22] border-b border-[#21262d] overflow-x-auto flex-shrink-0">
+              {openTabs.map((tab) => (
+                <div
+                  key={tab.id}
+                  className={`group flex items-center gap-1.5 px-3 py-2 text-xs font-medium cursor-pointer border-r border-[#21262d] shrink-0 max-w-[220px] ${
+                    activeTabId === tab.id
+                      ? 'bg-[#0d1117] text-gray-200 border-b-2 border-b-[#58a6ff]'
+                      : 'text-gray-500 hover:text-gray-300 hover:bg-[#1c2333]'
+                  }`}
+                  onClick={() => setActiveTabId(tab.id)}
+                >
+                  <span className="truncate">{tab.label}</span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); closeTab(tab.id); }}
+                    className="ml-1 p-0.5 rounded hover:bg-[#30363d] text-gray-600 hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+              <div className="ml-auto flex items-center gap-1 shrink-0">
+                <button
+                  onClick={() => setPanelVisible(false)}
+                  className="px-2 py-1.5 text-xs text-gray-500 hover:text-gray-300"
+                  title="Hide panel (keep tabs)"
+                >
+                  Hide
+                </button>
+                <button
+                  onClick={() => { setOpenTabs([]); setActiveTabId(null); }}
+                  className="px-2 py-1.5 text-xs text-gray-500 hover:text-gray-300"
+                >
+                  Close all
+                </button>
+              </div>
+            </div>
+            {/* Detail content */}
+            <div className="flex-1 overflow-hidden">
+              {activeTabId && <RequestDetailPanel requestId={activeTabId} />}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50">
+          <div className="bg-[#161b22] border border-[#30363d] rounded-lg max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-900/40 flex items-center justify-center">
+                <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-medium text-gray-100">Clear All Logs</h3>
+                <p className="text-sm text-gray-500">Delete all {total.toLocaleString()} requests? This cannot be undone.</p>
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setDeleteConfirm(false)} className="px-4 py-2 border border-[#30363d] rounded-md text-sm text-gray-300 hover:bg-[#1c2333]">Cancel</button>
+              <button onClick={clearLogs} className="px-4 py-2 bg-red-600 rounded-md text-sm text-white hover:bg-red-700">Delete All</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default Dashboard;
