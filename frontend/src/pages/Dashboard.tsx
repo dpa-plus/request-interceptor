@@ -502,99 +502,50 @@ function Dashboard() {
   const showRightPane = openTabs.length > 0 && panelVisible;
 
   return (
-    <div className="relative flex h-[calc(100vh-56px)] overflow-hidden -mx-4 sm:-mx-6 lg:-mx-8 -my-6">
+    <div className="relative flex h-[calc(100vh-40px)] overflow-hidden">
       {/* ====== LEFT: Sidebar (Request List) ====== */}
       <div
         style={{ width: showRightPane ? sidebarWidth : undefined }}
         className={`${showRightPane ? 'flex-shrink-0' : 'flex-1'} flex flex-col border-r border-[#30363d] bg-[#0d1117]`}
       >
-        {/* Header */}
-        <div className="flex justify-between items-center px-4 py-3 border-b border-[#21262d]">
-          <div className="flex items-center gap-3">
-            <h1 className="text-lg font-bold text-gray-200">Request Logs</h1>
-            <span
-              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
-                connected
-                  ? 'bg-green-900/40 text-green-400'
-                  : 'bg-gray-800 text-gray-500'
-              }`}
-            >
-              <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`} />
-              {connected ? 'Live' : 'Offline'}
-            </span>
-            <span className="text-xs text-gray-600">{total.toLocaleString()}</span>
-          </div>
-          <div className="flex gap-1.5">
-            {/* Pause/Resume live updates */}
-            <button
-              onClick={() => setPaused(!paused)}
-              className={`p-2 border rounded-md ${
-                paused
-                  ? 'bg-yellow-900/30 border-yellow-700 text-yellow-400'
-                  : 'bg-[#21262d] border-[#30363d] text-gray-400 hover:bg-[#30363d] hover:text-gray-200'
-              }`}
-              title={paused ? 'Resume live updates' : 'Pause live updates'}
-            >
-              {paused ? (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                </svg>
-              ) : (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6" />
-                </svg>
-              )}
-            </button>
-            <button
-              onClick={() => fetchLogs()}
-              className="p-2 bg-[#21262d] border border-[#30363d] rounded-md text-gray-400 hover:bg-[#30363d] hover:text-gray-200"
-              title="Refresh"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        {/* Toolbar: status + actions */}
+        <div className="flex items-center justify-between px-2 py-1 border-b border-[#21262d]">
+          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+            connected ? 'bg-green-900/40 text-green-400' : 'bg-gray-800 text-gray-500'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`} />
+            {total.toLocaleString()}
+          </span>
+          <div className="flex items-center gap-1">
+            <button onClick={() => setPaused(!paused)} className={`p-1 rounded ${paused ? 'text-yellow-400 bg-yellow-900/30' : 'text-gray-500 hover:text-gray-300'}`} title={paused ? 'Resume' : 'Pause'}>
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {paused ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /> : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6" />}
               </svg>
             </button>
-            <button
-              onClick={() => setDeleteConfirm(true)}
-              className="px-3 py-2 bg-red-600 rounded-md text-sm font-medium text-white hover:bg-red-700 flex items-center gap-1"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-              Clear
+            <button onClick={() => fetchLogs()} className="p-1 text-gray-500 hover:text-gray-300" title="Refresh">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+            </button>
+            <button onClick={() => setDeleteConfirm(true)} className="p-1 text-gray-500 hover:text-red-400" title="Clear all">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
             </button>
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="px-3 py-2 border-b border-[#21262d]">
-          {/* Search - full width */}
-          <div className="mb-2">
-            <div className="relative">
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <input
-                type="text"
-                placeholder="Search path, URL, model..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 border border-[#30363d] rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-[#1f6feb] focus:border-[#1f6feb] bg-[#0d1117] text-gray-200 placeholder-gray-500"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-400"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              )}
-            </div>
+        {/* Search + filter dropdowns */}
+        <div className="px-2 py-1.5 border-b border-[#21262d] space-y-1.5">
+          <div className="relative">
+            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Search path, URL, model..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-2 py-1.5 border border-[#30363d] rounded text-xs bg-[#0d1117] text-gray-200 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-[#1f6feb]"
+            />
           </div>
-          {/* Filter row - wraps gracefully at narrow widths */}
-          <div className="flex flex-wrap gap-1.5 items-center">
+          <div className="flex flex-wrap gap-1 items-center">
             {/* Time Range */}
             <select
               value={timeRange.includes(',') ? 'custom' : timeRange}
@@ -715,14 +666,14 @@ function Dashboard() {
 
         {/* Column headers (only in full-width mode) */}
         {!showRightPane && (
-          <div className="flex items-center gap-2 px-3 py-1.5 border-b border-[#21262d] text-[10px] text-gray-600 uppercase tracking-wider select-none bg-[#161b22]">
-            <span className="flex-shrink-0 w-3" />
-            <span className="flex-shrink-0 w-12">Method</span>
-            <span className="flex-shrink-0 w-7">Status</span>
-            <span className="flex-1 min-w-0">Path</span>
-            <span className="flex-shrink-0 w-14 text-right">Time</span>
-            <span className="flex-shrink-0 w-10 text-right">AI</span>
-            <span className="flex-shrink-0 w-14 text-right">When</span>
+          <div className="flex items-center gap-3 px-2 py-1 border-b border-[#21262d] text-[10px] text-gray-600 uppercase tracking-wider select-none bg-[#161b22]">
+            <span className="w-3 flex-shrink-0" />
+            <span className="w-11 flex-shrink-0">Method</span>
+            <span className="w-8 flex-shrink-0">Status</span>
+            <span className="flex-1">Path</span>
+            <span className="w-14 text-right flex-shrink-0">Time</span>
+            <span className="w-10 text-right flex-shrink-0">AI</span>
+            <span className="w-14 text-right flex-shrink-0">When</span>
           </div>
         )}
 
@@ -743,7 +694,7 @@ function Dashboard() {
               return (
                 <div
                   key={log.id}
-                  className={`group flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors text-xs ${
+                  className={`group flex items-center gap-3 px-2 py-2 cursor-pointer transition-colors text-xs ${
                     isActive ? 'bg-[#1f6feb15] border-l-2 border-l-[#58a6ff]' : 'hover:bg-[#1c2333] border-l-2 border-l-transparent'
                   } ${pinnedIds.has(log.id) ? 'bg-[#1c2333]/30' : ''}`}
                   style={groupColor && !isActive ? { borderLeftColor: groupColor } : undefined}
