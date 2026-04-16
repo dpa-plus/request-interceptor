@@ -666,8 +666,8 @@ function Dashboard() {
 
         {/* Column headers (only in full-width mode) */}
         {!showRightPane && (
-          <div className="grid border-b border-[#21262d] text-[12px] font-bold text-gray-400 uppercase tracking-wider select-none bg-[#161b22] px-2 py-2"
-            style={{ gridTemplateColumns: '20px 60px 44px 1fr 70px 44px 70px', gap: '0 12px' }}>
+          <div className="grid border-b border-[#30363d] text-[13px] font-bold text-gray-300 uppercase tracking-wider select-none bg-[#161b22] px-3 py-2.5"
+            style={{ gridTemplateColumns: '24px 64px 60px 1fr 80px 56px 80px', gap: '0 16px' }}>
             <span />
             <span>Method</span>
             <span>Status</span>
@@ -693,14 +693,14 @@ function Dashboard() {
               const isToday = ts.toDateString() === new Date().toDateString();
               const timeStr = isToday ? ts.toLocaleTimeString() : `${ts.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })} ${ts.toLocaleTimeString()}`;
               const rowStyle: React.CSSProperties = {
-                gridTemplateColumns: '20px 60px 44px 1fr 70px 44px 70px',
-                columnGap: '12px',
+                gridTemplateColumns: '24px 64px 60px 1fr 80px 56px 80px',
+                columnGap: '16px',
                 ...(groupColor && !isActive ? { borderLeftColor: groupColor } : {}),
               };
               return (
                 <div
                   key={log.id}
-                  className={`group grid items-center px-2 py-2.5 cursor-pointer transition-colors text-[13px] ${
+                  className={`group grid items-center px-3 py-2 cursor-pointer transition-colors text-[14px] ${
                     isActive ? 'bg-[#1f6feb15] border-l-2 border-l-[#58a6ff]' : 'hover:bg-[#1c2333] border-l-2 border-l-transparent'
                   } ${pinnedIds.has(log.id) ? 'bg-[#1c2333]/30' : ''}`}
                   style={rowStyle}
@@ -710,15 +710,15 @@ function Dashboard() {
                     onClick={(e) => { e.stopPropagation(); togglePin(log.id); }}
                     className={`text-center ${pinnedIds.has(log.id) ? 'text-yellow-400' : 'text-gray-700 opacity-0 group-hover:opacity-100'}`}
                   >★</button>
-                  <span className={`px-1.5 py-0.5 text-[11px] font-bold rounded text-center ${getMethodColor(log.method)}`}>
+                  <span className={`px-2 py-0.5 text-[12px] font-bold rounded text-center ${getMethodColor(log.method)}`}>
                     {log.method}
                   </span>
-                  <span className={`font-bold ${getStatusColor(log.statusCode)}`}>
+                  <span className={`font-bold text-[13px] ${getStatusColor(log.statusCode)}`}>
                     {log.statusCode || '...'}
                   </span>
-                  <span className="text-gray-300 font-mono truncate min-w-0">{log.path}</span>
-                  <span className={`text-right ${
-                    (log.responseTime || 0) > 1000 ? 'text-orange-400' : 'text-gray-500'
+                  <span className="text-gray-200 font-mono truncate min-w-0">{log.path}</span>
+                  <span className={`text-right text-[13px] ${
+                    (log.responseTime || 0) > 1000 ? 'text-orange-400' : 'text-gray-400'
                   }`}>
                     {log.responseTime ? `${log.responseTime}ms` : ''}
                   </span>
@@ -731,7 +731,7 @@ function Dashboard() {
                       <span className="px-1.5 py-0.5 rounded bg-purple-900/40 text-purple-300 text-[11px]">AI</span>
                     ) : null}
                   </span>
-                  <span className="text-gray-500 text-[11px] text-right">{timeStr.split(' ').pop()}</span>
+                  <span className="text-gray-500 text-[12px] text-right">{timeStr.split(' ').pop()}</span>
                 </div>
               );
             })}
