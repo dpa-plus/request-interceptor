@@ -769,7 +769,7 @@ export function createAdminApp() {
         },
       });
 
-      invalidateRoutingCache(); // Ensure proxy sees the new rule immediately
+      invalidateRoutingCache();
       res.status(201).json(rule);
     } catch (error) {
       console.error('Error creating routing rule:', error);
@@ -805,7 +805,7 @@ export function createAdminApp() {
         },
       });
 
-      invalidateRoutingCache(); // Ensure proxy sees the updated rule immediately
+      invalidateRoutingCache();
       res.json(rule);
     } catch (error) {
       console.error('Error updating routing rule:', error);
@@ -819,7 +819,7 @@ export function createAdminApp() {
       await prisma.routingRule.delete({
         where: { id: req.params.id },
       });
-      invalidateRoutingCache(); // Ensure proxy stops using the deleted rule immediately
+      invalidateRoutingCache();
       res.json({ success: true });
     } catch (error) {
       console.error('Error deleting routing rule:', error);
@@ -862,7 +862,7 @@ export function createAdminApp() {
         },
       });
 
-      invalidateRoutingCache(); // Ensure proxy sees the new default target URL immediately
+      invalidateRoutingCache();
       res.json(config);
     } catch (error) {
       console.error('Error updating config:', error);
