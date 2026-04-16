@@ -559,7 +559,7 @@ function Dashboard() {
                   updateParam('time', e.target.value);
                 }
               }}
-              className="flex-1 min-w-0 px-2 py-1.5 border border-[#30363d] rounded text-xs bg-[#0d1117] text-gray-300"
+              className="flex-1 min-w-0 pl-2 pr-7 py-1.5 border border-[#30363d] rounded text-xs bg-[#0d1117] text-gray-300 appearance-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%236b7280%22%20stroke-width%3D%222%22%3E%3Cpath%20d%3D%22M6%209l6%206%206-6%22%2F%3E%3C%2Fsvg%3E')] bg-no-repeat bg-[right_0.5rem_center]"
             >
               <option value="">All Time</option>
               <option value="5m">Last 5 min</option>
@@ -596,7 +596,7 @@ function Dashboard() {
             <select
               value={filter}
               onChange={(e) => setFilter(e.target.value as 'all' | 'ai' | 'regular')}
-              className="flex-1 min-w-0 px-2 py-1.5 border border-[#30363d] rounded text-xs bg-[#0d1117] text-gray-300"
+              className="flex-1 min-w-0 pl-2 pr-7 py-1.5 border border-[#30363d] rounded text-xs bg-[#0d1117] text-gray-300 appearance-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%236b7280%22%20stroke-width%3D%222%22%3E%3Cpath%20d%3D%22M6%209l6%206%206-6%22%2F%3E%3C%2Fsvg%3E')] bg-no-repeat bg-[right_0.5rem_center]"
             >
               <option value="all">All Types</option>
               <option value="ai">AI Only</option>
@@ -607,7 +607,7 @@ function Dashboard() {
             <select
               value={methodFilter}
               onChange={(e) => setMethodFilter(e.target.value)}
-              className="flex-1 min-w-0 px-2 py-1.5 border border-[#30363d] rounded text-xs bg-[#0d1117] text-gray-300"
+              className="flex-1 min-w-0 pl-2 pr-7 py-1.5 border border-[#30363d] rounded text-xs bg-[#0d1117] text-gray-300 appearance-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%236b7280%22%20stroke-width%3D%222%22%3E%3Cpath%20d%3D%22M6%209l6%206%206-6%22%2F%3E%3C%2Fsvg%3E')] bg-no-repeat bg-[right_0.5rem_center]"
             >
               <option value="">All Methods</option>
               <option value="GET">GET</option>
@@ -621,7 +621,7 @@ function Dashboard() {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="flex-1 min-w-0 px-2 py-1.5 border border-[#30363d] rounded text-xs bg-[#0d1117] text-gray-300"
+              className="flex-1 min-w-0 pl-2 pr-7 py-1.5 border border-[#30363d] rounded text-xs bg-[#0d1117] text-gray-300 appearance-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%236b7280%22%20stroke-width%3D%222%22%3E%3Cpath%20d%3D%22M6%209l6%206%206-6%22%2F%3E%3C%2Fsvg%3E')] bg-no-repeat bg-[right_0.5rem_center]"
             >
               <option value="">All Status</option>
               <option value="2xx">2xx Success</option>
