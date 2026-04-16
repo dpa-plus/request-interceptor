@@ -33,9 +33,16 @@ interface RequestLog {
     completionTokens: number | null;
     totalTokens: number | null;
     totalCostMicros: number | null;
+    totalDuration: number | null;
+    timeToFirstToken: number | null;
     systemPrompt: string | null;
     userMessages: string | null;
     assistantResponse: string | null;
+    messages: string | null;
+    fullRequest: string | null;
+    hasToolCalls: boolean;
+    toolCallCount: number | null;
+    toolNames: string | null;
   } | null;
 }
 
@@ -207,46 +214,155 @@ export function RequestDetailPanel({ requestId }: Props) {
           </div>
         )}
 
-        {activeTab === 'ai' && log.aiRequest && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="bg-[#1c2333] rounded p-2">
-                <div className="text-xs text-gray-500">Provider</div>
-                <div className="text-sm text-gray-200 capitalize">{log.aiRequest.provider}</div>
-              </div>
-              <div className="bg-[#1c2333] rounded p-2">
-                <div className="text-xs text-gray-500">Model</div>
-                <div className="text-sm text-gray-200">{log.aiRequest.model || '-'}</div>
-              </div>
-              <div className="bg-[#1c2333] rounded p-2">
-                <div className="text-xs text-gray-500">Tokens</div>
-                <div className="text-sm text-gray-200">{log.aiRequest.totalTokens?.toLocaleString() || '-'}</div>
-              </div>
-              <div className="bg-[#1c2333] rounded p-2">
-                <div className="text-xs text-gray-500">Cost</div>
-                <div className="text-sm text-gray-200">
-                  {log.aiRequest.totalCostMicros ? `$${(log.aiRequest.totalCostMicros / 1_000_000).toFixed(4)}` : '-'}
+        {activeTab === 'ai' && log.aiRequest && (() => {
+          const ai = log.aiRequest;
+          const promptPct = ai.totalTokens ? Math.round(((ai.promptTokens || 0) / ai.totalTokens) * 100) : 0;
+          const completionPct = 100 - promptPct;
+          const tokPerSec = ai.totalDuration && ai.completionTokens
+            ? ((ai.completionTokens / ai.totalDuration) * 1000).toFixed(1)
+            : null;
+
+          // Parse conversation messages
+          let messages: { role: string; content: string }[] = [];
+          try {
+            if (ai.messages) messages = JSON.parse(ai.messages);
+          } catch {}
+          // Fallback to legacy fields
+          if (messages.length === 0) {
+            if (ai.systemPrompt) messages.push({ role: 'system', content: ai.systemPrompt });
+            if (ai.userMessages) {
+              try {
+                const parsed = JSON.parse(ai.userMessages);
+                if (Array.isArray(parsed)) parsed.forEach((m: string) => messages.push({ role: 'user', content: m }));
+                else messages.push({ role: 'user', content: String(parsed) });
+              } catch { messages.push({ role: 'user', content: ai.userMessages }); }
+            }
+            if (ai.assistantResponse) messages.push({ role: 'assistant', content: ai.assistantResponse });
+          }
+
+          // Parse request params from fullRequest
+          let reqParams: Record<string, any> = {};
+          try {
+            if (ai.fullRequest) {
+              const parsed = JSON.parse(ai.fullRequest);
+              if (parsed.temperature !== undefined) reqParams.temperature = parsed.temperature;
+              if (parsed.max_tokens !== undefined) reqParams.max_tokens = parsed.max_tokens;
+              if (parsed.top_p !== undefined) reqParams.top_p = parsed.top_p;
+              if (parsed.response_format) reqParams.response_format = parsed.response_format.type || JSON.stringify(parsed.response_format);
+            }
+          } catch {}
+
+          const roleColors: Record<string, { bg: string; border: string; text: string; icon: string }> = {
+            system: { bg: 'bg-gray-800/50', border: 'border-gray-700', text: 'text-gray-400', icon: '⚙' },
+            user: { bg: 'bg-[#1f6feb15]', border: 'border-[#1f6feb33]', text: 'text-[#58a6ff]', icon: '👤' },
+            assistant: { bg: 'bg-green-900/20', border: 'border-green-800/30', text: 'text-green-400', icon: '🤖' },
+            tool: { bg: 'bg-amber-900/20', border: 'border-amber-800/30', text: 'text-amber-400', icon: '🔧' },
+          };
+
+          return (
+            <div className="space-y-4">
+              {/* AI Summary bar */}
+              <div className="bg-[#161b22] border border-[#30363d] rounded-lg px-4 py-3">
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                  <span className="px-2 py-0.5 text-xs font-bold rounded bg-purple-900/40 text-purple-300 capitalize">{ai.provider}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-gray-500">Model:</span>
+                    <span className="text-sm font-medium text-gray-200">{ai.model || '-'}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-gray-500">Tokens:</span>
+                    <span className="text-sm font-medium text-gray-200">{ai.totalTokens?.toLocaleString() || '-'}</span>
+                    {ai.promptTokens != null && ai.completionTokens != null && (
+                      <span className="text-xs text-gray-500">({ai.promptTokens.toLocaleString()}↑ {ai.completionTokens.toLocaleString()}↓)</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-gray-500">Cost:</span>
+                    <span className="text-sm font-bold text-green-400">
+                      {ai.totalCostMicros ? `$${(ai.totalCostMicros / 1_000_000).toFixed(ai.totalCostMicros > 100000 ? 2 : 4)}` : '-'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-gray-500">Duration:</span>
+                    <span className="text-sm font-medium text-gray-200">{ai.totalDuration || log.responseTime || '-'}ms</span>
+                    {tokPerSec && <span className="text-xs text-[#58a6ff]">{tokPerSec} tok/s</span>}
+                  </div>
                 </div>
+
+                {/* Token usage bar */}
+                {ai.totalTokens && ai.totalTokens > 0 && (
+                  <div className="mt-2 pt-2 border-t border-[#21262d]">
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 flex rounded-full overflow-hidden h-1.5 bg-[#21262d]">
+                        <div className="bg-blue-500" style={{ width: `${promptPct}%` }} />
+                        <div className="bg-green-500 flex-1" />
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-gray-500">
+                        <span className="flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-blue-500" />
+                          Prompt: {promptPct}%
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-green-500" />
+                          Completion: {completionPct}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
+
+              {/* Request Parameters */}
+              {Object.keys(reqParams).length > 0 && (
+                <div>
+                  <h4 className="text-xs font-medium text-gray-500 uppercase mb-2">Request Parameters</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {Object.entries(reqParams).map(([key, value]) => (
+                      <div key={key} className="bg-[#1c2333] rounded p-2">
+                        <div className="text-xs text-gray-500">{key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</div>
+                        <div className="text-sm font-medium text-gray-200">
+                          {typeof value === 'number' ? (Number.isInteger(value) ? value.toLocaleString() : value.toFixed(4)) : String(value)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Conversation */}
+              {messages.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-xs font-medium text-gray-500 uppercase">Conversation</h4>
+                    <div className="flex gap-1">
+                      {ai.userMessages && <CopyButton text={ai.userMessages} label="Copy Prompt" />}
+                      {ai.assistantResponse && <CopyButton text={ai.assistantResponse} label="Copy Response" />}
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    {messages.map((msg, i) => {
+                      const colors = roleColors[msg.role] || roleColors.user;
+                      const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+                      return (
+                        <div key={i} className="flex gap-2">
+                          <div className={`flex-shrink-0 w-6 h-6 rounded-full ${colors.bg} flex items-center justify-center text-xs`}>
+                            {colors.icon}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className={`text-xs font-medium ${colors.text} mb-0.5 capitalize`}>{msg.role}</div>
+                            <div className={`${colors.bg} border ${colors.border} rounded-lg p-2.5 text-xs text-gray-300 whitespace-pre-wrap break-words overflow-auto max-h-60`}>
+                              {content}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
-            {log.aiRequest.systemPrompt && (
-              <div>
-                <h4 className="text-xs font-medium text-gray-500 uppercase mb-2">System Prompt</h4>
-                <pre className="text-xs text-gray-300 bg-[#1c2333] rounded p-3 whitespace-pre-wrap overflow-auto max-h-40">
-                  {log.aiRequest.systemPrompt}
-                </pre>
-              </div>
-            )}
-            {log.aiRequest.assistantResponse && (
-              <div>
-                <h4 className="text-xs font-medium text-gray-500 uppercase mb-2">Response</h4>
-                <pre className="text-xs text-gray-300 bg-[#1c2333] rounded p-3 whitespace-pre-wrap overflow-auto max-h-60">
-                  {log.aiRequest.assistantResponse}
-                </pre>
-              </div>
-            )}
-          </div>
-        )}
+          );
+        })()}
       </div>
     </div>
   );
