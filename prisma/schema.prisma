@@ -48,6 +48,7 @@ model RequestLog {
   @@index([method])
   @@index([isAiRequest])
   @@index([targetUrl])
+  @@index([statusCode])
 }
 
 model AiRequest {

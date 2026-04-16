@@ -41,6 +41,7 @@ export function createAdminApp() {
       const from = req.query.from as string;
       const to = req.query.to as string;
       const search = req.query.search as string;
+      const statusFilter = req.query.status as string; // "2xx", "3xx", "4xx", "5xx", "errors"
 
       const where: any = {};
 
@@ -58,6 +59,20 @@ export function createAdminApp() {
           { path: { contains: search } },
           { body: { contains: search } },
         ];
+      }
+      // Status code filtering
+      if (statusFilter) {
+        if (statusFilter === 'errors') {
+          where.statusCode = { gte: 400 };
+        } else if (statusFilter === '2xx') {
+          where.statusCode = { gte: 200, lt: 300 };
+        } else if (statusFilter === '3xx') {
+          where.statusCode = { gte: 300, lt: 400 };
+        } else if (statusFilter === '4xx') {
+          where.statusCode = { gte: 400, lt: 500 };
+        } else if (statusFilter === '5xx') {
+          where.statusCode = { gte: 500 };
+        }
       }
 
       const [logs, total] = await Promise.all([

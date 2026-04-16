@@ -3,6 +3,30 @@ import { prisma } from './prisma.js';
 
 export type RouteSource = 'query_param' | 'header' | 'config_rule' | 'default';
 
+// Cache routing rules and config to avoid DB queries on every proxied request
+let cachedRules: { data: any[]; expiry: number } | null = null;
+let cachedConfig: { data: any; expiry: number } | null = null;
+const CACHE_TTL = 10_000; // 10 seconds
+
+async function getCachedRules() {
+  if (cachedRules && Date.now() < cachedRules.expiry) return cachedRules.data;
+  const rules = await prisma.routingRule.findMany({ where: { enabled: true }, orderBy: { priority: 'desc' } });
+  cachedRules = { data: rules, expiry: Date.now() + CACHE_TTL };
+  return rules;
+}
+
+async function getCachedConfig() {
+  if (cachedConfig && Date.now() < cachedConfig.expiry) return cachedConfig.data;
+  const config = await prisma.config.findUnique({ where: { id: 'default' } });
+  cachedConfig = { data: config, expiry: Date.now() + CACHE_TTL };
+  return config;
+}
+
+export function invalidateRoutingCache() {
+  cachedRules = null;
+  cachedConfig = null;
+}
+
 export interface ResolvedTarget {
   targetUrl: string;
   source: RouteSource;
@@ -82,11 +106,8 @@ export async function resolveTarget(req: Request): Promise<ResolvedTarget | Rout
     };
   }
 
-  // 3. Check routing rules
-  const rules = await prisma.routingRule.findMany({
-    where: { enabled: true },
-    orderBy: { priority: 'desc' },
-  });
+  // 3. Check routing rules (cached for performance)
+  const rules = await getCachedRules();
 
   for (const rule of rules) {
     if (matchesRule(req, rule)) {
@@ -99,8 +120,8 @@ export async function resolveTarget(req: Request): Promise<ResolvedTarget | Rout
     }
   }
 
-  // 3. Check default target from config
-  const config = await prisma.config.findUnique({ where: { id: 'default' } });
+  // 4. Check default target from config (cached)
+  const config = await getCachedConfig();
 
   if (config?.defaultTargetUrl) {
     return {

@@ -475,13 +475,16 @@ async function handleStreamingResponse(
         } as any,
       });
 
+      const responseStr = chunks.join('');
+      const responseSize = responseStr.length;
+
       await prisma.requestLog.update({
         where: { id: logId },
         data: {
           statusCode: proxyRes.statusCode,
           responseHeaders: safeJsonStringify(proxyRes.headers),
           responseBody: '[Streaming response - see AI request details]',
-          responseSize: chunks.join('').length,
+          responseSize,
           responseTime,
           aiRequestId: aiRequest.id,
         },
@@ -492,7 +495,7 @@ async function handleStreamingResponse(
         id: logId,
         statusCode: proxyRes.statusCode ?? null,
         responseTime,
-        responseSize: chunks.join('').length,
+        responseSize,
         error: null,
         aiRequestId: aiRequest.id,
         model: parsedResponse.model || parsedAiReq.model,

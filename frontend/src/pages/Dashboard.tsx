@@ -270,9 +270,34 @@ function Dashboard() {
         setLoading(true);
       }
       const params = new URLSearchParams({ limit: String(LOGS_PER_PAGE) });
+
+      // Pass ALL filters to backend so SQL does the filtering
       if (filter === 'ai') params.set('isAiRequest', 'true');
       if (filter === 'regular') params.set('isAiRequest', 'false');
       if (methodFilter) params.set('method', methodFilter);
+      if (statusFilter) params.set('status', statusFilter);
+      if (searchQuery) params.set('search', searchQuery);
+
+      // Time range → from/to params for backend
+      if (timeRange) {
+        const now = new Date();
+        if (timeRange === 'today') {
+          const startOfDay = new Date(now);
+          startOfDay.setHours(0, 0, 0, 0);
+          params.set('from', startOfDay.toISOString());
+        } else if (timeRange === '5m') {
+          params.set('from', new Date(now.getTime() - 5 * 60 * 1000).toISOString());
+        } else if (timeRange === '15m') {
+          params.set('from', new Date(now.getTime() - 15 * 60 * 1000).toISOString());
+        } else if (timeRange === '1h') {
+          params.set('from', new Date(now.getTime() - 60 * 60 * 1000).toISOString());
+        } else if (timeRange.includes(',')) {
+          // Custom range: "from,to" format
+          const [fromStr, toStr] = timeRange.split(',');
+          if (fromStr) params.set('from', fromStr);
+          if (toStr) params.set('to', toStr);
+        }
+      }
 
       const response = await fetch(`/api/logs?${params}`);
       if (!response.ok) throw new Error('Failed to fetch logs');
@@ -286,7 +311,7 @@ function Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, [filter, methodFilter]);
+  }, [filter, methodFilter, statusFilter, searchQuery, timeRange]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
@@ -360,57 +385,13 @@ function Dashboard() {
     }
   };
 
-  // Filter, sort, and pin-prioritize logs
+  // Sort and pin-prioritize logs (filtering is now server-side)
   const filteredLogs = useMemo(() => {
-    const now = Date.now();
-    const timeRangeMs: Record<string, number> = {
-      '5m': 5 * 60 * 1000,
-      '15m': 15 * 60 * 1000,
-      '1h': 60 * 60 * 1000,
-      'today': 0, // special: start of today
-    };
-
-    let result = logs.filter((log) => {
-      // Time range filter
-      if (timeRange && timeRange in timeRangeMs) {
-        const logTime = new Date(log.createdAt).getTime();
-        if (timeRange === 'today') {
-          const startOfDay = new Date();
-          startOfDay.setHours(0, 0, 0, 0);
-          if (logTime < startOfDay.getTime()) return false;
-        } else {
-          if (now - logTime > timeRangeMs[timeRange]) return false;
-        }
-      }
-
-      // Status filter
-      if (statusFilter) {
-        const status = log.statusCode;
-        if (!status) return false;
-        if (statusFilter === 'errors' && status < 400) return false;
-        if (statusFilter === '2xx' && (status < 200 || status >= 300)) return false;
-        if (statusFilter === '3xx' && (status < 300 || status >= 400)) return false;
-        if (statusFilter === '4xx' && (status < 400 || status >= 500)) return false;
-        if (statusFilter === '5xx' && status < 500) return false;
-      }
-
-      // Search filter
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase();
-        return (
-          log.path.toLowerCase().includes(query) ||
-          log.url.toLowerCase().includes(query) ||
-          log.targetUrl?.toLowerCase().includes(query) ||
-          log.aiRequest?.model?.toLowerCase().includes(query)
-        );
-      }
-
-      return true;
-    });
+    let result = [...logs];
 
     // Sort (if a sort column is selected)
     if (sortBy) {
-      result = [...result].sort((a, b) => {
+      result.sort((a, b) => {
         let cmp = 0;
         switch (sortBy) {
           case 'status':
@@ -433,17 +414,17 @@ function Dashboard() {
       });
     }
 
-    // Pinned requests float to the top
+    // Pinned requests float to the top (always visible regardless of filters)
     if (pinnedIds.size > 0) {
       result.sort((a, b) => {
         const aPinned = pinnedIds.has(a.id) ? 1 : 0;
         const bPinned = pinnedIds.has(b.id) ? 1 : 0;
-        return bPinned - aPinned; // pinned first
+        return bPinned - aPinned;
       });
     }
 
     return result;
-  }, [logs, statusFilter, searchQuery, timeRange, sortBy, sortDir, pinnedIds]);
+  }, [logs, sortBy, sortDir, pinnedIds]);
 
   // Assign group colors to consecutive logs that share the same host within a time window.
   // This creates subtle colored left-border stripes in the flat list - no collapsible rows.
@@ -636,8 +617,17 @@ function Dashboard() {
 
           {/* Time Range */}
           <select
-            value={timeRange}
-            onChange={(e) => updateParam('time', e.target.value)}
+            value={timeRange.includes(',') ? 'custom' : timeRange}
+            onChange={(e) => {
+              if (e.target.value === 'custom') {
+                // Default custom range: last 24 hours
+                const now = new Date();
+                const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+                updateParam('time', `${yesterday.toISOString()},${now.toISOString()}`);
+              } else {
+                updateParam('time', e.target.value);
+              }
+            }}
             className="px-3 py-2 border border-[#30363d] rounded-md text-sm bg-[#0d1117] text-gray-300"
           >
             <option value="">All Time</option>
@@ -645,7 +635,31 @@ function Dashboard() {
             <option value="15m">Last 15 min</option>
             <option value="1h">Last hour</option>
             <option value="today">Today</option>
+            <option value="custom">Custom range...</option>
           </select>
+          {timeRange.includes(',') && (
+            <div className="flex items-center gap-1">
+              <input
+                type="datetime-local"
+                value={timeRange.split(',')[0]?.slice(0, 16) || ''}
+                onChange={(e) => {
+                  const to = timeRange.split(',')[1] || new Date().toISOString();
+                  updateParam('time', `${new Date(e.target.value).toISOString()},${to}`);
+                }}
+                className="px-2 py-1.5 border border-[#30363d] rounded text-xs bg-[#0d1117] text-gray-300"
+              />
+              <span className="text-gray-500 text-xs">to</span>
+              <input
+                type="datetime-local"
+                value={timeRange.split(',')[1]?.slice(0, 16) || ''}
+                onChange={(e) => {
+                  const from = timeRange.split(',')[0] || '';
+                  updateParam('time', `${from},${new Date(e.target.value).toISOString()}`);
+                }}
+                className="px-2 py-1.5 border border-[#30363d] rounded text-xs bg-[#0d1117] text-gray-300"
+              />
+            </div>
+          )}
 
           {/* Type Filter */}
           <select
@@ -910,7 +924,14 @@ function Dashboard() {
                       )}
                     </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(log.createdAt).toLocaleTimeString()}
+                        {(() => {
+                          const d = new Date(log.createdAt);
+                          const today = new Date();
+                          const isToday = d.toDateString() === today.toDateString();
+                          return isToday
+                            ? d.toLocaleTimeString()
+                            : `${d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })} ${d.toLocaleTimeString()}`;
+                        })()}
                       </td>
                     </tr>
                   );
