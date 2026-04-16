@@ -501,36 +501,25 @@ function Dashboard() {
 
   return (
     <div className="flex h-[calc(100vh-56px)] overflow-hidden -mx-4 sm:-mx-6 lg:-mx-8 -my-6">
-      {/* ====== LEFT SIDEBAR: Request List ====== */}
-      <div style={{ width: sidebarWidth }} className="flex-shrink-0 flex flex-col border-r border-[#30363d] bg-[#0d1117]">
+      {/* ====== LEFT: Request List ====== */}
+      <div style={{ width: openTabs.length > 0 ? sidebarWidth : undefined }} className={`${openTabs.length > 0 ? 'flex-shrink-0' : 'flex-1'} flex flex-col border-r border-[#30363d] bg-[#0d1117]`}>
         {/* Header */}
-      <div className="flex justify-between items-start mb-6">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gray-100">Request Logs</h1>
-            <span
-              className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
-                connected
-                  ? 'bg-green-100 text-green-800'
-                  : 'bg-gray-100 text-gray-400'
-              }`}
-              title={connected ? 'Real-time updates active' : 'Not connected to server'}
-            >
-              <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
-              {connected ? 'Live' : 'Offline'}
-            </span>
-          </div>
-          <p className="text-sm text-gray-500 mt-1">
-            {groupingEnabled && logGroupColors.size > 0 ? (
-              <>{filteredLogs.length.toLocaleString()} requests &middot; grouped by host</>
-            ) : filteredLogs.length === logs.length ? (
-              <>{total.toLocaleString()} total requests</>
-            ) : (
-              <>{filteredLogs.length.toLocaleString()} of {logs.length.toLocaleString()} requests (filtered)</>
-            )}
-          </p>
+      <div className="flex justify-between items-center px-4 py-3 border-b border-[#21262d]">
+        <div className="flex items-center gap-3">
+          <h1 className="text-lg font-bold text-gray-200">Request Logs</h1>
+          <span
+            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+              connected
+                ? 'bg-green-900/40 text-green-400'
+                : 'bg-gray-800 text-gray-500'
+            }`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`} />
+            {connected ? 'Live' : 'Offline'}
+          </span>
+          <span className="text-xs text-gray-600">{total.toLocaleString()}</span>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-1.5">
           {/* Pause/Resume live updates */}
           <button
             onClick={() => setPaused(!paused)}
@@ -573,10 +562,10 @@ function Dashboard() {
       </div>
 
       {/* Filters */}
-      <div className="bg-[#161b22] border border-[#30363d] rounded-lg mb-4 p-3">
-        <div className="flex flex-wrap items-center gap-3">
+      <div className="px-3 py-2 border-b border-[#21262d] space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Search */}
-          <div className="flex-1 min-w-[200px]">
+          <div className="flex-1 min-w-[120px]">
             <div className="relative">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -748,48 +737,42 @@ function Dashboard() {
           {filteredLogs.map((log) => {
             const groupColor = logGroupColors.get(log.id);
             const isActive = activeTabId === log.id;
+            const ts = new Date(log.createdAt);
+            const isToday = ts.toDateString() === new Date().toDateString();
+            const timeStr = isToday ? ts.toLocaleTimeString() : `${ts.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })} ${ts.toLocaleTimeString()}`;
             return (
               <div
                 key={log.id}
-                className={`group px-3 py-2 cursor-pointer transition-colors ${
+                className={`group flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors text-xs ${
                   isActive ? 'bg-[#1f6feb15] border-l-2 border-l-[#58a6ff]' : 'hover:bg-[#1c2333] border-l-2 border-l-transparent'
                 } ${pinnedIds.has(log.id) ? 'bg-[#1c2333]/30' : ''}`}
                 style={groupColor && !isActive ? { borderLeftColor: groupColor } : undefined}
                 onClick={() => openRequestTab(log.id, `${log.method} ${log.path}`)}
               >
-                <div className="flex items-center gap-2 mb-0.5">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); togglePin(log.id); }}
-                    className={`text-xs flex-shrink-0 ${pinnedIds.has(log.id) ? 'text-yellow-400' : 'text-gray-700 opacity-0 group-hover:opacity-100'}`}
-                  >★</button>
-                  <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded ${getMethodColor(log.method)}`}>
-                    {log.method}
+                <button
+                  onClick={(e) => { e.stopPropagation(); togglePin(log.id); }}
+                  className={`flex-shrink-0 ${pinnedIds.has(log.id) ? 'text-yellow-400' : 'text-gray-700 opacity-0 group-hover:opacity-100'}`}
+                >★</button>
+                <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded flex-shrink-0 ${getMethodColor(log.method)}`}>
+                  {log.method}
+                </span>
+                <span className={`font-bold flex-shrink-0 w-7 text-center ${getStatusColor(log.statusCode)}`}>
+                  {log.statusCode || '...'}
+                </span>
+                <span className="text-gray-300 font-mono truncate flex-1 min-w-0">{log.path}</span>
+                <span className={`flex-shrink-0 w-14 text-right ${
+                  (log.responseTime || 0) > 1000 ? 'text-orange-400' : 'text-gray-500'
+                }`}>
+                  {log.responseTime ? `${log.responseTime}ms` : ''}
+                </span>
+                {log.isAiRequest && log.aiRequest ? (
+                  <span className="flex-shrink-0 px-1.5 py-0.5 rounded bg-purple-900/40 text-purple-300 text-[10px] truncate max-w-[100px]">
+                    {(log.aiRequest.model || 'AI').replace(/^.*\//, '')}
                   </span>
-                  <span className={`text-xs font-bold ${getStatusColor(log.statusCode)}`}>
-                    {log.statusCode || '...'}
-                  </span>
-                  <span className="text-[10px] text-gray-500 ml-auto">
-                    {log.responseTime ? `${log.responseTime}ms` : ''}
-                  </span>
-                </div>
-                <div className="text-xs text-gray-300 font-mono truncate">{log.path}</div>
-                {log.isAiRequest && log.aiRequest && (
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="text-[10px] text-purple-400 truncate">
-                      {(log.aiRequest.model || 'AI').replace(/^.*\//, '')}
-                    </span>
-                    {log.aiRequest.totalTokens && (
-                      <span className="text-[10px] text-gray-600">
-                        {log.aiRequest.totalTokens.toLocaleString()} tok
-                      </span>
-                    )}
-                    {log.aiRequest.totalCostMicros && (
-                      <span className="text-[10px] text-green-500">
-                        ${(log.aiRequest.totalCostMicros / 1_000_000).toFixed(4)}
-                      </span>
-                    )}
-                  </div>
-                )}
+                ) : log.isAiRequest ? (
+                  <span className="flex-shrink-0 px-1 py-0.5 rounded bg-purple-900/40 text-purple-300 text-[10px]">AI</span>
+                ) : null}
+                <span className="flex-shrink-0 text-gray-600 text-[10px] w-14 text-right">{timeStr.split(' ').pop()}</span>
               </div>
             );
           })}
@@ -803,16 +786,17 @@ function Dashboard() {
       </div>
     </div>
 
-    {/* ====== RESIZE HANDLE ====== */}
-    <div
-      onMouseDown={startSidebarResize}
-      className="w-1 cursor-col-resize bg-[#30363d] hover:bg-[#58a6ff] transition-colors flex-shrink-0"
-    />
 
-    {/* ====== RIGHT PANE: Detail View ====== */}
-    <div className="flex-1 flex flex-col bg-[#0d1117] min-w-0">
-      {openTabs.length > 0 ? (
-        <>
+
+    {/* ====== RIGHT PANE: Detail View (only when tabs are open) ====== */}
+    {openTabs.length > 0 && (
+      <>
+        {/* Resize handle */}
+        <div
+          onMouseDown={startSidebarResize}
+          className="w-1 cursor-col-resize bg-[#30363d] hover:bg-[#58a6ff] transition-colors flex-shrink-0"
+        />
+        <div className="flex-1 flex flex-col bg-[#0d1117] min-w-0">
           {/* Tab bar */}
           <div className="flex items-center bg-[#161b22] border-b border-[#21262d] overflow-x-auto flex-shrink-0">
             {openTabs.map((tab) => (
@@ -836,32 +820,20 @@ function Dashboard() {
                 </button>
               </div>
             ))}
-            {openTabs.length > 1 && (
-              <button
-                onClick={() => { setOpenTabs([]); setActiveTabId(null); }}
-                className="ml-auto px-3 py-2 text-xs text-gray-500 hover:text-gray-300 shrink-0"
-              >
-                Close all
-              </button>
-            )}
+            <button
+              onClick={() => { setOpenTabs([]); setActiveTabId(null); }}
+              className="ml-auto px-3 py-2 text-xs text-gray-500 hover:text-gray-300 shrink-0"
+            >
+              Close all
+            </button>
           </div>
           {/* Detail content */}
           <div className="flex-1 overflow-hidden">
             {activeTabId && <RequestDetailPanel requestId={activeTabId} />}
           </div>
-        </>
-      ) : (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center text-gray-600">
-            <svg className="w-16 h-16 mx-auto mb-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
-            </svg>
-            <p className="text-sm">Click a request to inspect it</p>
-            <p className="text-xs text-gray-700 mt-1">Ctrl+click to open in a new browser tab</p>
-          </div>
         </div>
-      )}
-    </div>
+      </>
+    )}
 
     {/* Delete Confirmation Modal - keep it outside the layout */}
     {deleteConfirm && (

@@ -3,5 +3,25 @@
 @tailwind utilities;
 
 body {
-  @apply bg-gray-50 text-gray-900;
+  @apply bg-[#0d1117] text-gray-200;
+}
+
+/* Dark scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #30363d #0d1117;
+}
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-track {
+  background: #0d1117;
+}
+*::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 3px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #484f58;
 }
