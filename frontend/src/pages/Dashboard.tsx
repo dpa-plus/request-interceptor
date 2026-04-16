@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useSocket, RequestStartEvent, RequestCompleteEvent } from '../hooks/useSocket';
 import { RequestDetailPanel } from '../components/RequestDetailPanel';
@@ -55,38 +55,7 @@ function Dashboard() {
   const [openTabs, setOpenTabs] = useState<{ id: string; label: string }[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
 
-  const tabPanelRef = useRef<HTMLDivElement>(null);
-  const [panelHeight, setPanelHeight] = useState(350);
-  const [panelVisible, setPanelVisible] = useState(true);
-  const isDragging = useRef(false);
 
-  // Drag-to-resize the bottom panel
-  const startResize = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    isDragging.current = true;
-    const startY = e.clientY;
-    const startHeight = panelHeight;
-
-    const onMouseMove = (moveEvent: MouseEvent) => {
-      if (!isDragging.current) return;
-      const delta = startY - moveEvent.clientY;
-      const newHeight = Math.min(Math.max(startHeight + delta, 150), window.innerHeight - 100);
-      setPanelHeight(newHeight);
-    };
-
-    const onMouseUp = () => {
-      isDragging.current = false;
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-
-    document.body.style.cursor = 'row-resize';
-    document.body.style.userSelect = 'none';
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-  }, [panelHeight]);
 
   const openRequestTab = useCallback((id: string, label: string) => {
     setOpenTabs(prev => {
@@ -94,7 +63,6 @@ function Dashboard() {
       return [...prev, { id, label }];
     });
     setActiveTabId(id);
-    setPanelVisible(true); // Always show panel when opening a tab
   }, []);
 
   const closeTab = useCallback((id: string) => {
@@ -495,6 +463,28 @@ function Dashboard() {
 
 
 
+  // Left-right split resize
+  const [sidebarWidth, setSidebarWidth] = useState(420);
+  const startSidebarResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = sidebarWidth;
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const newWidth = Math.min(Math.max(startWidth + (moveEvent.clientX - startX), 280), window.innerWidth - 400);
+      setSidebarWidth(newWidth);
+    };
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }, [sidebarWidth]);
+
   if (loading && logs.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -510,8 +500,10 @@ function Dashboard() {
   }
 
   return (
-    <div>
-      {/* Header */}
+    <div className="flex h-[calc(100vh-56px)] overflow-hidden -mx-4 sm:-mx-6 lg:-mx-8 -my-6">
+      {/* ====== LEFT SIDEBAR: Request List ====== */}
+      <div style={{ width: sidebarWidth }} className="flex-shrink-0 flex flex-col border-r border-[#30363d] bg-[#0d1117]">
+        {/* Header */}
       <div className="flex justify-between items-start mb-6">
         <div>
           <div className="flex items-center gap-3">
@@ -745,298 +737,97 @@ function Dashboard() {
         </div>
       )}
 
-      {/* Table */}
-      <div className="bg-[#161b22] border border-[#30363d] rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-[#21262d]">
-            <thead className="bg-[#161b22]">
-              <tr>
-                <th className="w-8 px-2 py-3" />
-                {[
-                  { key: 'method', label: 'Method' },
-                  { key: 'path', label: 'Path' },
-                  { key: '', label: 'Target' },
-                  { key: 'status', label: 'Status' },
-                  { key: 'time', label: 'Time' },
-                  { key: '', label: 'AI Details' },
-                  { key: 'timestamp', label: 'Timestamp' },
-                ].map(({ key, label }) => (
-                  <th
-                    key={label}
-                    className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider select-none ${
-                      key ? 'cursor-pointer hover:text-gray-300' : ''
-                    } ${key && sortBy === key ? 'text-[#58a6ff]' : 'text-gray-500'}`}
-                    onClick={key ? () => {
-                      if (sortBy === key) {
-                        updateParam('dir', sortDir === 'desc' ? 'asc' : 'desc');
-                      } else {
-                        setSearchParams(prev => {
-                          const next = new URLSearchParams(prev);
-                          next.set('sort', key);
-                          next.set('dir', 'desc');
-                          return next;
-                        });
-                      }
-                    } : undefined}
-                  >
-                    <span className="flex items-center gap-1">
-                      {label}
-                      {key && sortBy === key && (
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                            d={sortDir === 'asc' ? 'M5 15l7-7 7 7' : 'M19 9l-7 7-7-7'} />
-                        </svg>
-                      )}
+      {/* Compact request list */}
+      <div className="flex-1 overflow-auto">
+        <div className="divide-y divide-[#21262d]">
+          {filteredLogs.length === 0 && !loading && (
+            <div className="p-6 text-center text-gray-500 text-sm">
+              {logs.length === 0 ? 'No requests logged yet' : 'No requests match your filters'}
+            </div>
+          )}
+          {filteredLogs.map((log) => {
+            const groupColor = logGroupColors.get(log.id);
+            const isActive = activeTabId === log.id;
+            return (
+              <div
+                key={log.id}
+                className={`group px-3 py-2 cursor-pointer transition-colors ${
+                  isActive ? 'bg-[#1f6feb15] border-l-2 border-l-[#58a6ff]' : 'hover:bg-[#1c2333] border-l-2 border-l-transparent'
+                } ${pinnedIds.has(log.id) ? 'bg-[#1c2333]/30' : ''}`}
+                style={groupColor && !isActive ? { borderLeftColor: groupColor } : undefined}
+                onClick={() => openRequestTab(log.id, `${log.method} ${log.path}`)}
+              >
+                <div className="flex items-center gap-2 mb-0.5">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); togglePin(log.id); }}
+                    className={`text-xs flex-shrink-0 ${pinnedIds.has(log.id) ? 'text-yellow-400' : 'text-gray-700 opacity-0 group-hover:opacity-100'}`}
+                  >★</button>
+                  <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded ${getMethodColor(log.method)}`}>
+                    {log.method}
+                  </span>
+                  <span className={`text-xs font-bold ${getStatusColor(log.statusCode)}`}>
+                    {log.statusCode || '...'}
+                  </span>
+                  <span className="text-[10px] text-gray-500 ml-auto">
+                    {log.responseTime ? `${log.responseTime}ms` : ''}
+                  </span>
+                </div>
+                <div className="text-xs text-gray-300 font-mono truncate">{log.path}</div>
+                {log.isAiRequest && log.aiRequest && (
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-[10px] text-purple-400 truncate">
+                      {(log.aiRequest.model || 'AI').replace(/^.*\//, '')}
                     </span>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="bg-[#0d1117] divide-y divide-[#21262d]">
-              {filteredLogs.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center">
-                    {logs.length === 0 ? (
-                      <>
-                        <svg className="w-12 h-12 mx-auto text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                        <p className="text-gray-300 font-medium mb-2">No requests logged yet</p>
-                        <p className="text-gray-500 text-sm mb-4 max-w-md mx-auto">
-                          Send HTTP requests through the proxy to see them here.
-                          Point your app or tools at port 3101, or use a target URL:
-                        </p>
-                        <div className="bg-[#161b22] rounded-lg p-3 max-w-lg mx-auto text-left">
-                          <p className="text-xs font-medium text-gray-500 mb-2">Quick test with curl:</p>
-                          <code className="text-xs text-gray-300 font-mono block whitespace-pre-wrap">
-                            curl http://localhost:3101/get?__target=https://httpbin.org
-                          </code>
-                        </div>
-                        <p className="text-xs text-gray-400 mt-3">
-                          Or run: <code className="bg-gray-100 px-1 rounded">bash scripts/seed-test-data.sh</code> to generate sample data
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <svg className="w-12 h-12 mx-auto text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
-                        <p className="text-gray-500">No requests match your filters</p>
-                        <button
-                          onClick={() => setSearchParams(new URLSearchParams())}
-                          className="mt-2 text-[#58a6ff] hover:text-[#79c0ff] text-sm"
-                        >
-                          Clear all filters
-                        </button>
-                      </>
+                    {log.aiRequest.totalTokens && (
+                      <span className="text-[10px] text-gray-600">
+                        {log.aiRequest.totalTokens.toLocaleString()} tok
+                      </span>
                     )}
-                  </td>
-                </tr>
-              ) : (
-                filteredLogs.map((log) => {
-                  const groupColor = logGroupColors.get(log.id);
-                  return (
-                    <tr
-                      key={log.id}
-                      className={`group relative hover:bg-[#1c2333] transition-colors ${
-                        log.statusCode === null ? 'animate-pulse bg-[#1c2333]' : ''
-                      } ${lastViewedId === log.id ? 'bg-yellow-900/20 ring-1 ring-yellow-700/50' : ''} ${activeTabId === log.id ? 'bg-[#1c2333]' : ''} ${pinnedIds.has(log.id) ? 'bg-[#1c2333]/50' : ''}`}
-                      style={groupColor ? { borderLeft: `3px solid ${groupColor}` } : undefined}
-                    >
-                      <td className="w-8 px-2 py-3">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); togglePin(log.id); }}
-                          className={`relative z-10 p-0.5 rounded transition-colors ${
-                            pinnedIds.has(log.id)
-                              ? 'text-yellow-400'
-                              : 'text-gray-600 opacity-0 group-hover:opacity-100 hover:text-gray-400'
-                          }`}
-                          title={pinnedIds.has(log.id) ? 'Unpin request' : 'Pin request'}
-                        >
-                          <svg className="w-3.5 h-3.5" fill={pinnedIds.has(log.id) ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                          </svg>
-                        </button>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span
-                          className={`relative z-10 px-2 py-1 text-xs font-bold rounded ${getMethodColor(log.method)}`}
-                        >
-                          {log.method}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-200 max-w-xs truncate font-mono">
-                        <Link
-                          to={`/request/${log.id}`}
-                          className="text-[#58a6ff] hover:text-[#79c0ff] hover:underline before:absolute before:inset-0 focus:outline-none"
-                          title={`${log.path} (Ctrl+click for full page)`}
-                          onClick={(e) => {
-                            if (!e.ctrlKey && !e.metaKey && !e.shiftKey && e.button === 0) {
-                              e.preventDefault();
-                              openRequestTab(log.id, `${log.method} ${log.path}`);
-                            }
-                          }}
-                        >
-                          {log.path}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-500 max-w-[160px] truncate" title={log.targetUrl}>
-                        {(() => { try { return new URL(log.targetUrl).hostname; } catch { return log.targetUrl || '-'; } })()}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        {log.statusCode === null ? (
-                          <span className="text-sm text-gray-500">...</span>
-                        ) : (
-                          <span className={`text-sm font-bold ${getStatusColor(log.statusCode)}`}>
-                            {log.statusCode}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm">
-                        {log.responseTime ? (
-                          <span className={`font-medium ${
-                            log.responseTime > 2000 ? 'text-red-400' :
-                            log.responseTime > 1000 ? 'text-orange-400' :
-                            log.responseTime > 500 ? 'text-yellow-400' :
-                            'text-green-400'
-                          }`}>
-                            {log.responseTime}ms
-                          </span>
-                        ) : '-'}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        {log.isAiRequest && log.aiRequest ? (
-                          <div className="flex flex-col gap-0.5 max-w-[220px]">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-900/40 text-purple-300 truncate" title={log.aiRequest.model || ''}>
-                              {log.aiRequest.model || log.aiRequest.provider || 'AI'}
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              {log.aiRequest.totalTokens?.toLocaleString() || '?'} tokens
-                              {log.aiRequest.totalCostMicros
-                                ? ` · $${(log.aiRequest.totalCostMicros / 1_000_000).toFixed(log.aiRequest.totalCostMicros > 100000 ? 2 : 4)}`
-                                : ''}
-                            </span>
-                          </div>
-                        ) : log.isAiRequest ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-900/40 text-purple-300">AI</span>
-                        ) : (
-                          <span className="text-gray-700">-</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                        {(() => {
-                          const d = new Date(log.createdAt);
-                          const today = new Date();
-                          const isToday = d.toDateString() === today.toDateString();
-                          return isToday
-                            ? d.toLocaleTimeString()
-                            : `${d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })} ${d.toLocaleTimeString()}`;
-                        })()}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-
-          {/* Infinite scroll trigger */}
-          <div ref={loadMoreRef} className="py-4 flex justify-center">
-            {loadingMore && (
-              <div className="flex items-center gap-2 text-gray-500">
-                <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                <span>Loading more...</span>
+                    {log.aiRequest.totalCostMicros && (
+                      <span className="text-[10px] text-green-500">
+                        ${(log.aiRequest.totalCostMicros / 1_000_000).toFixed(4)}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
-            )}
+            );
+          })}
+          <div ref={loadMoreRef} className="py-3 flex justify-center">
+            {loadingMore && <span className="text-xs text-gray-500">Loading more...</span>}
             {!hasMore && logs.length > 0 && (
-              <span className="text-sm text-gray-400">All {total.toLocaleString()} requests loaded</span>
+              <span className="text-[10px] text-gray-600">{total.toLocaleString()} requests</span>
             )}
           </div>
         </div>
       </div>
+    </div>
 
-      {/* Delete Confirmation Modal */}
-      {deleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50">
-          <div className="bg-[#161b22] border border-[#30363d] rounded-lg max-w-md w-full p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-                <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-lg font-medium text-gray-100">Clear All Logs</h3>
-                <p className="text-sm text-gray-500">
-                  Are you sure you want to delete all {total.toLocaleString()} logged requests? This cannot be undone.
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setDeleteConfirm(false)}
-                className="px-4 py-2 border border-[#30363d] rounded-md text-sm font-medium text-gray-300 hover:bg-[#1c2333]"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={clearLogs}
-                className="px-4 py-2 bg-red-600 rounded-md text-sm font-medium text-white hover:bg-red-700"
-              >
-                Delete All
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+    {/* ====== RESIZE HANDLE ====== */}
+    <div
+      onMouseDown={startSidebarResize}
+      className="w-1 cursor-col-resize bg-[#30363d] hover:bg-[#58a6ff] transition-colors flex-shrink-0"
+    />
 
-      {/* Spacer so content doesn't hide behind the fixed panel */}
-      {openTabs.length > 0 && panelVisible && <div style={{ height: panelHeight + 10 }} />}
-
-      {/* Reopen panel button (shown when panel is hidden but tabs exist) */}
-      {openTabs.length > 0 && !panelVisible && (
-        <button
-          onClick={() => setPanelVisible(true)}
-          className="fixed bottom-4 right-4 z-40 px-4 py-2 bg-[#1f6feb] text-white text-sm font-medium rounded-lg shadow-lg hover:bg-[#1a5fd4] flex items-center gap-2"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-          </svg>
-          Show panel ({openTabs.length} {openTabs.length === 1 ? 'tab' : 'tabs'})
-        </button>
-      )}
-
-      {/* ===== Fixed Bottom Panel (like DevTools) ===== */}
-      {openTabs.length > 0 && panelVisible && (
-        <div ref={tabPanelRef} className="fixed bottom-0 left-0 right-0 z-40 bg-[#0d1117] shadow-[0_-4px_20px_rgba(0,0,0,0.4)]" style={{ height: panelHeight }}>
-          {/* Drag handle */}
-          <div
-            onMouseDown={startResize}
-            className="h-1.5 cursor-row-resize bg-[#30363d] hover:bg-[#58a6ff] transition-colors group flex items-center justify-center"
-          >
-            <div className="w-10 h-0.5 rounded bg-gray-600 group-hover:bg-white" />
-          </div>
+    {/* ====== RIGHT PANE: Detail View ====== */}
+    <div className="flex-1 flex flex-col bg-[#0d1117] min-w-0">
+      {openTabs.length > 0 ? (
+        <>
           {/* Tab bar */}
-          <div className="flex items-center bg-[#161b22] border-b border-[#21262d] overflow-x-auto">
+          <div className="flex items-center bg-[#161b22] border-b border-[#21262d] overflow-x-auto flex-shrink-0">
             {openTabs.map((tab) => (
               <div
                 key={tab.id}
-                className={`group flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium cursor-pointer border-r border-[#21262d] shrink-0 max-w-[200px] ${
+                className={`group flex items-center gap-1.5 px-3 py-2 text-xs font-medium cursor-pointer border-r border-[#21262d] shrink-0 max-w-[220px] ${
                   activeTabId === tab.id
-                    ? 'bg-[#0d1117] text-gray-200'
+                    ? 'bg-[#0d1117] text-gray-200 border-b-2 border-b-[#58a6ff]'
                     : 'text-gray-500 hover:text-gray-300 hover:bg-[#1c2333]'
                 }`}
                 onClick={() => setActiveTabId(tab.id)}
               >
                 <span className="truncate">{tab.label}</span>
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    closeTab(tab.id);
-                  }}
+                  onClick={(e) => { e.stopPropagation(); closeTab(tab.id); }}
                   className="ml-1 p-0.5 rounded hover:bg-[#30363d] text-gray-600 hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
                 >
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1045,25 +836,58 @@ function Dashboard() {
                 </button>
               </div>
             ))}
-            <button
-              onClick={() => setPanelVisible(false)}
-              className="ml-auto px-3 py-1.5 text-xs text-gray-500 hover:text-gray-300 shrink-0"
-              title="Hide panel (tabs are kept)"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
+            {openTabs.length > 1 && (
+              <button
+                onClick={() => { setOpenTabs([]); setActiveTabId(null); }}
+                className="ml-auto px-3 py-2 text-xs text-gray-500 hover:text-gray-300 shrink-0"
+              >
+                Close all
+              </button>
+            )}
           </div>
-
-          {/* Active tab content - fills remaining height */}
-          <div className="flex-1 overflow-hidden" style={{ height: 'calc(100% - 40px)' }}>
+          {/* Detail content */}
+          <div className="flex-1 overflow-hidden">
             {activeTabId && <RequestDetailPanel requestId={activeTabId} />}
+          </div>
+        </>
+      ) : (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center text-gray-600">
+            <svg className="w-16 h-16 mx-auto mb-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+            </svg>
+            <p className="text-sm">Click a request to inspect it</p>
+            <p className="text-xs text-gray-700 mt-1">Ctrl+click to open in a new browser tab</p>
           </div>
         </div>
       )}
     </div>
-  );
+
+    {/* Delete Confirmation Modal - keep it outside the layout */}
+    {deleteConfirm && (
+      <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50">
+        <div className="bg-[#161b22] border border-[#30363d] rounded-lg max-w-md w-full p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-900/40 flex items-center justify-center">
+              <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-lg font-medium text-gray-100">Clear All Logs</h3>
+              <p className="text-sm text-gray-500">Delete all {total.toLocaleString()} requests? This cannot be undone.</p>
+            </div>
+          </div>
+          <div className="flex gap-3 justify-end">
+            <button onClick={() => setDeleteConfirm(false)} className="px-4 py-2 border border-[#30363d] rounded-md text-sm text-gray-300 hover:bg-[#1c2333]">Cancel</button>
+            <button onClick={clearLogs} className="px-4 py-2 bg-red-600 rounded-md text-sm text-white hover:bg-red-700">Delete All</button>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+);
 }
 
 export default Dashboard;
+/* END OF FILE - old table code removed */
