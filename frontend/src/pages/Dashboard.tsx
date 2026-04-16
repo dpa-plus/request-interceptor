@@ -906,19 +906,19 @@ function Dashboard() {
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         {log.isAiRequest && log.aiRequest ? (
-                          <div className="flex flex-col gap-0.5 max-w-[200px]">
-                            <span className="text-xs font-medium text-purple-300 truncate" title={log.aiRequest.model || ''}>
-                              {(log.aiRequest.model || log.aiRequest.provider || 'AI').replace(/^.*\//, '')}
+                          <div className="flex flex-col gap-0.5 max-w-[220px]">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-900/40 text-purple-300 truncate" title={log.aiRequest.model || ''}>
+                              {log.aiRequest.model || log.aiRequest.provider || 'AI'}
                             </span>
                             <span className="text-xs text-gray-500">
                               {log.aiRequest.totalTokens?.toLocaleString() || '?'} tokens
                               {log.aiRequest.totalCostMicros
-                                ? ` · $${(log.aiRequest.totalCostMicros / 1_000_000).toFixed(4)}`
+                                ? ` · $${(log.aiRequest.totalCostMicros / 1_000_000).toFixed(log.aiRequest.totalCostMicros > 100000 ? 2 : 4)}`
                                 : ''}
                             </span>
                           </div>
                         ) : log.isAiRequest ? (
-                          <span className="text-xs text-purple-400">AI</span>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-900/40 text-purple-300">AI</span>
                         ) : (
                           <span className="text-gray-700">-</span>
                         )}
