@@ -51,12 +51,14 @@ function Dashboard() {
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [paused, setPaused] = useState(false);
   // Tab system - open request details as tabs below the list
   const [openTabs, setOpenTabs] = useState<{ id: string; label: string }[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
 
   const tabPanelRef = useRef<HTMLDivElement>(null);
   const [panelHeight, setPanelHeight] = useState(350);
+  const [panelVisible, setPanelVisible] = useState(true);
   const isDragging = useRef(false);
 
   // Drag-to-resize the bottom panel
@@ -93,6 +95,7 @@ function Dashboard() {
       return [...prev, { id, label }];
     });
     setActiveTabId(id);
+    setPanelVisible(true); // Always show panel when opening a tab
   }, []);
 
   const closeTab = useCallback((id: string) => {
@@ -179,6 +182,7 @@ function Dashboard() {
 
   // Handle incoming request from Socket.IO
   const handleRequestStart = useCallback((event: RequestStartEvent) => {
+    if (paused) return; // Don't add new requests while paused
     // Check if it matches current filters
     if (filter === 'ai' && !event.isAiRequest) return;
     if (filter === 'regular' && event.isAiRequest) return;
@@ -210,7 +214,7 @@ function Dashboard() {
       return [newLog, ...prev.slice(0, 99)]; // Keep max 100
     });
     setTotal((prev) => prev + 1);
-  }, [filter, methodFilter]);
+  }, [filter, methodFilter, paused]);
 
   // Handle request completion from Socket.IO
   const handleRequestComplete = useCallback((event: RequestCompleteEvent) => {
@@ -343,6 +347,7 @@ function Dashboard() {
       if (statusFilter) {
         const status = log.statusCode;
         if (!status) return false;
+        if (statusFilter === 'errors' && status < 400) return false;
         if (statusFilter === '2xx' && (status < 200 || status >= 300)) return false;
         if (statusFilter === '3xx' && (status < 300 || status >= 400)) return false;
         if (statusFilter === '4xx' && (status < 400 || status >= 500)) return false;
@@ -366,7 +371,8 @@ function Dashboard() {
 
   // Assign group colors to consecutive logs that share the same host within a time window.
   // This creates subtle colored left-border stripes in the flat list - no collapsible rows.
-  const GROUP_COLORS = ['border-l-blue-500', 'border-l-emerald-500', 'border-l-amber-500', 'border-l-purple-500', 'border-l-rose-500', 'border-l-cyan-500'];
+  // Actual hex colors for group stripes (Tailwind JIT can't resolve dynamic class names)
+  const GROUP_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#a855f7', '#f43f5e', '#06b6d4'];
 
   const logGroupColors = useMemo((): Map<string, string> => {
     if (!groupingEnabled || filteredLogs.length === 0) return new Map();
@@ -482,6 +488,26 @@ function Dashboard() {
           </p>
         </div>
         <div className="flex gap-2">
+          {/* Pause/Resume live updates */}
+          <button
+            onClick={() => setPaused(!paused)}
+            className={`p-2 border rounded-md ${
+              paused
+                ? 'bg-yellow-900/30 border-yellow-700 text-yellow-400'
+                : 'bg-[#21262d] border-[#30363d] text-gray-400 hover:bg-[#30363d] hover:text-gray-200'
+            }`}
+            title={paused ? 'Resume live updates' : 'Pause live updates'}
+          >
+            {paused ? (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6" />
+              </svg>
+            )}
+          </button>
           <button
             onClick={() => fetchLogs()}
             className="p-2 bg-[#21262d] border border-[#30363d] rounded-md text-gray-400 hover:bg-[#30363d] hover:text-gray-200"
@@ -569,6 +595,19 @@ function Dashboard() {
             <option value="4xx">4xx Client Error</option>
             <option value="5xx">5xx Server Error</option>
           </select>
+
+          {/* Errors only toggle */}
+          <button
+            onClick={() => setStatusFilter(statusFilter === 'errors' ? '' : 'errors')}
+            className={`px-3 py-2 border rounded-md text-sm font-medium ${
+              statusFilter === 'errors'
+                ? 'bg-red-900/30 border-red-700 text-red-400'
+                : 'border-[#30363d] text-gray-400 hover:bg-[#1c2333]'
+            }`}
+            title="Show only 4xx and 5xx errors"
+          >
+            Errors
+          </button>
 
           {/* Group toggle */}
           <button
@@ -686,9 +725,8 @@ function Dashboard() {
                       key={log.id}
                       className={`relative hover:bg-[#1c2333] transition-colors ${
                         log.statusCode === null ? 'animate-pulse bg-[#1c2333]' : ''
-                      } ${lastViewedId === log.id ? 'bg-yellow-900/20 ring-1 ring-yellow-700/50' : ''} ${
-                        groupColor ? `border-l-[3px] ${groupColor}` : ''
-                      } ${activeTabId === log.id ? 'bg-[#1c2333]' : ''}`}
+                      } ${lastViewedId === log.id ? 'bg-yellow-900/20 ring-1 ring-yellow-700/50' : ''} ${activeTabId === log.id ? 'bg-[#1c2333]' : ''}`}
+                      style={groupColor ? { borderLeft: `3px solid ${groupColor}` } : undefined}
                     >
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span
@@ -813,10 +851,23 @@ function Dashboard() {
       )}
 
       {/* Spacer so content doesn't hide behind the fixed panel */}
-      {openTabs.length > 0 && <div style={{ height: panelHeight + 10 }} />}
+      {openTabs.length > 0 && panelVisible && <div style={{ height: panelHeight + 10 }} />}
+
+      {/* Reopen panel button (shown when panel is hidden but tabs exist) */}
+      {openTabs.length > 0 && !panelVisible && (
+        <button
+          onClick={() => setPanelVisible(true)}
+          className="fixed bottom-4 right-4 z-40 px-4 py-2 bg-[#1f6feb] text-white text-sm font-medium rounded-lg shadow-lg hover:bg-[#1a5fd4] flex items-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+          </svg>
+          Show panel ({openTabs.length} {openTabs.length === 1 ? 'tab' : 'tabs'})
+        </button>
+      )}
 
       {/* ===== Fixed Bottom Panel (like DevTools) ===== */}
-      {openTabs.length > 0 && (
+      {openTabs.length > 0 && panelVisible && (
         <div ref={tabPanelRef} className="fixed bottom-0 left-0 right-0 z-40 bg-[#0d1117] shadow-[0_-4px_20px_rgba(0,0,0,0.4)]" style={{ height: panelHeight }}>
           {/* Drag handle */}
           <div
@@ -852,9 +903,9 @@ function Dashboard() {
               </div>
             ))}
             <button
-              onClick={() => { setOpenTabs([]); setActiveTabId(null); }}
+              onClick={() => setPanelVisible(false)}
               className="ml-auto px-3 py-1.5 text-xs text-gray-500 hover:text-gray-300 shrink-0"
-              title="Close panel"
+              title="Hide panel (tabs are kept)"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
