@@ -716,12 +716,12 @@ function Dashboard() {
         {/* Column headers (only in full-width mode) */}
         {!showRightPane && (
           <div className="flex items-center gap-2 px-3 py-1.5 border-b border-[#21262d] text-[10px] text-gray-600 uppercase tracking-wider select-none bg-[#161b22]">
-            <span className="w-3 flex-shrink-0" />
-            <span className="flex-shrink-0" style={{ width: 50 }}>Method</span>
-            <span className="flex-shrink-0 w-7 text-center">Status</span>
+            <span className="flex-shrink-0 w-3" />
+            <span className="flex-shrink-0 w-12">Method</span>
+            <span className="flex-shrink-0 w-7">Status</span>
             <span className="flex-1 min-w-0">Path</span>
             <span className="flex-shrink-0 w-14 text-right">Time</span>
-            <span className="flex-shrink-0 w-12 text-right">AI</span>
+            <span className="flex-shrink-0 w-10 text-right">AI</span>
             <span className="flex-shrink-0 w-14 text-right">When</span>
           </div>
         )}
@@ -765,13 +765,15 @@ function Dashboard() {
                   }`}>
                     {log.responseTime ? `${log.responseTime}ms` : ''}
                   </span>
-                  {log.isAiRequest && log.aiRequest ? (
-                    <span className="flex-shrink-0 px-1.5 py-0.5 rounded bg-purple-900/40 text-purple-300 text-[10px] truncate max-w-[100px]">
-                      {(log.aiRequest.model || 'AI').replace(/^.*\//, '')}
-                    </span>
-                  ) : log.isAiRequest ? (
-                    <span className="flex-shrink-0 px-1 py-0.5 rounded bg-purple-900/40 text-purple-300 text-[10px]">AI</span>
-                  ) : null}
+                  <span className="flex-shrink-0 w-10 text-right">
+                    {log.isAiRequest && log.aiRequest ? (
+                      <span className="px-1.5 py-0.5 rounded bg-purple-900/40 text-purple-300 text-[10px] truncate">
+                        {(log.aiRequest.model || 'AI').replace(/^.*\//, '').slice(0, 8)}
+                      </span>
+                    ) : log.isAiRequest ? (
+                      <span className="px-1 py-0.5 rounded bg-purple-900/40 text-purple-300 text-[10px]">AI</span>
+                    ) : null}
+                  </span>
                   <span className="flex-shrink-0 text-gray-600 text-[10px] w-14 text-right">{timeStr.split(' ').pop()}</span>
                 </div>
               );
@@ -790,7 +792,7 @@ function Dashboard() {
           <div className="flex-shrink-0 border-t border-[#21262d] px-3 py-2">
             <button
               onClick={() => setPanelVisible(true)}
-              className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 hover:text-gray-200 bg-[#161b22] hover:bg-[#1c2333] border border-[#30363d] rounded-md transition-colors"
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-[#1f6feb] hover:bg-[#1a5fd4] rounded-md transition-colors"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
