@@ -60,8 +60,10 @@ export function CopyButton({
   );
 }
 
-// Inline copy button for values (smaller, no background)
-export function InlineCopyButton({ text }: { text: string }) {
+// Inline copy button for values (smaller, no background).
+// By default it's invisible until the parent `.group` is hovered. Pass alwaysVisible
+// to make it persistently visible (e.g. in dense lists where hover discoverability isn't enough).
+export function InlineCopyButton({ text, alwaysVisible = false }: { text: string; alwaysVisible?: boolean }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = useCallback(async (e: React.MouseEvent) => {
@@ -76,10 +78,14 @@ export function InlineCopyButton({ text }: { text: string }) {
     }
   }, [text]);
 
+  const visibility = alwaysVisible
+    ? 'opacity-100'
+    : 'opacity-0 group-hover:opacity-100 transition-opacity';
+
   return (
     <button
       onClick={handleCopy}
-      className="opacity-0 group-hover:opacity-100 ml-1 p-0.5 rounded hover:bg-[#30363d] transition-opacity"
+      className={`${visibility} ml-1 p-0.5 rounded hover:bg-[#30363d]`}
       title="Copy value"
     >
       {copied ? (

@@ -63,6 +63,80 @@ function localInputToIso(local: string): string | null {
   return d.toISOString();
 }
 
+// Custom range picker with local draft state so that typing a single digit
+// doesn't re-render the entire Dashboard (which was interrupting the native
+// picker's editing flow and, worse, unmounting the pickers if the browser
+// momentarily reported an empty value).
+// Strategy: we keep draft values locally, commit to the URL only on blur.
+function CustomRangePicker({
+  fromIso,
+  toIso,
+  onCommit,
+  onClear,
+}: {
+  fromIso: string;
+  toIso: string;
+  onCommit: (fromIsoNew: string, toIsoNew: string) => void;
+  onClear: () => void;
+}) {
+  const [fromDraft, setFromDraft] = useState(() => isoToLocalInput(fromIso));
+  const [toDraft, setToDraft] = useState(() => isoToLocalInput(toIso));
+
+  // Sync drafts if the parent value changes externally (e.g. user picks a preset
+  // while in custom mode — shouldn't happen with current UX, but be safe).
+  useEffect(() => { setFromDraft(isoToLocalInput(fromIso)); }, [fromIso]);
+  useEffect(() => { setToDraft(isoToLocalInput(toIso)); }, [toIso]);
+
+  const commit = useCallback(() => {
+    const nextFrom = localInputToIso(fromDraft);
+    const nextTo = localInputToIso(toDraft);
+    // Only commit when BOTH values are valid — otherwise keep the draft and
+    // wait for the user to finish. Don't wipe state on a partial edit.
+    if (!nextFrom || !nextTo) return;
+    if (nextFrom === fromIso && nextTo === toIso) return; // no change
+    onCommit(nextFrom, nextTo);
+  }, [fromDraft, toDraft, fromIso, toIso, onCommit]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.currentTarget.blur(); // trigger onBlur → commit
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-1 px-2 py-1 rounded bg-[#161b22] border border-[#30363d]">
+      <label className="text-gray-500 text-xs select-none">From</label>
+      <input
+        type="datetime-local"
+        value={fromDraft}
+        onChange={(e) => setFromDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={handleKeyDown}
+        className="px-1.5 py-0.5 border border-[#30363d] rounded text-xs bg-[#0d1117] text-gray-300 [color-scheme:dark]"
+      />
+      <label className="text-gray-500 text-xs select-none">To</label>
+      <input
+        type="datetime-local"
+        value={toDraft}
+        onChange={(e) => setToDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={handleKeyDown}
+        className="px-1.5 py-0.5 border border-[#30363d] rounded text-xs bg-[#0d1117] text-gray-300 [color-scheme:dark]"
+      />
+      <button
+        onClick={onClear}
+        className="ml-1 p-0.5 text-gray-500 hover:text-gray-200 hover:bg-[#30363d] rounded"
+        title="Clear custom range"
+        aria-label="Clear custom range"
+      >
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
 function Dashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [logs, setLogs] = useState<RequestLog[]>([]);
@@ -611,44 +685,13 @@ function Dashboard() {
             </select>
             {timeRange.includes(',') && (() => {
               const [fromIso, toIso] = timeRange.split(',');
-              const setFrom = (localVal: string) => {
-                const newIso = localInputToIso(localVal);
-                // If the user clears the field, drop back to All Time so they aren't stuck.
-                if (!newIso) { updateParam('time', ''); return; }
-                updateParam('time', `${newIso},${toIso || new Date().toISOString()}`);
-              };
-              const setTo = (localVal: string) => {
-                const newIso = localInputToIso(localVal);
-                if (!newIso) { updateParam('time', ''); return; }
-                updateParam('time', `${fromIso || ''},${newIso}`);
-              };
               return (
-                <div className="flex items-center gap-1 px-2 py-1 rounded bg-[#161b22] border border-[#30363d]">
-                  <label className="text-gray-500 text-xs select-none">From</label>
-                  <input
-                    type="datetime-local"
-                    value={isoToLocalInput(fromIso || '')}
-                    onChange={(e) => setFrom(e.target.value)}
-                    className="px-1.5 py-0.5 border border-[#30363d] rounded text-xs bg-[#0d1117] text-gray-300 [color-scheme:dark]"
-                  />
-                  <label className="text-gray-500 text-xs select-none">To</label>
-                  <input
-                    type="datetime-local"
-                    value={isoToLocalInput(toIso || '')}
-                    onChange={(e) => setTo(e.target.value)}
-                    className="px-1.5 py-0.5 border border-[#30363d] rounded text-xs bg-[#0d1117] text-gray-300 [color-scheme:dark]"
-                  />
-                  <button
-                    onClick={() => updateParam('time', '')}
-                    className="ml-1 p-0.5 text-gray-500 hover:text-gray-200 hover:bg-[#30363d] rounded"
-                    title="Clear custom range"
-                    aria-label="Clear custom range"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
+                <CustomRangePicker
+                  fromIso={fromIso || ''}
+                  toIso={toIso || ''}
+                  onCommit={(f, t) => updateParam('time', `${f},${t}`)}
+                  onClear={() => updateParam('time', '')}
+                />
               );
             })()}
 

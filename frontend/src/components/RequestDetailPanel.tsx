@@ -344,11 +344,7 @@ export function RequestDetailPanel({ requestId }: Props) {
             if (ai.assistantResponse) messages.push({ role: 'assistant', content: ai.assistantResponse });
           }
 
-          // Build copy-all payloads
-          const allPromptsText = messages
-            .filter((m) => m.role === 'user' || m.role === 'system')
-            .map((m) => `[${m.role}]\n${messageToText(m)}`)
-            .join('\n\n---\n\n');
+          // Full conversation (user + assistant + tool + system) for the top-level copy button
           const allMessagesText = messages
             .map((m) => `[${m.role}]\n${messageToText(m)}`)
             .join('\n\n---\n\n');
@@ -448,7 +444,6 @@ export function RequestDetailPanel({ requestId }: Props) {
                   <div className="flex items-center justify-between mb-2">
                     <h4 className="text-xs font-medium text-gray-500 uppercase">Conversation</h4>
                     <div className="flex gap-1">
-                      {allPromptsText && <CopyButton text={allPromptsText} label="Copy All Prompts" />}
                       {messages.length > 0 && <CopyButton text={allMessagesText} label="Copy Full Conversation" />}
                     </div>
                   </div>
@@ -469,7 +464,7 @@ export function RequestDetailPanel({ requestId }: Props) {
                                   ← <span className="text-amber-300 font-mono">{msg.toolName}</span>
                                 </span>
                               )}
-                              {copyText && <InlineCopyButton text={copyText} />}
+                              {copyText && <InlineCopyButton text={copyText} alwaysVisible />}
                             </div>
                             <MessageBubble msg={msg} colors={colors} />
                           </div>
