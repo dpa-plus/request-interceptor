@@ -40,6 +40,28 @@ interface LogsResponse {
 
 const LOGS_PER_PAGE = 50;
 
+// --- Datetime helpers for the custom range picker ---
+
+// Convert an ISO UTC string (what the URL stores) into the LOCAL datetime-local
+// input value format `YYYY-MM-DDTHH:mm`. Returns '' if input is empty/invalid.
+// Without this, the old code did iso.slice(0, 16) which showed UTC time in a
+// picker that expects local time — so values appeared shifted by timezone offset.
+function isoToLocalInput(iso: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// Convert a local datetime-local input value to an ISO UTC string.
+// Returns null if input is empty/invalid (old code crashed via toISOString on Invalid Date).
+function localInputToIso(local: string): string | null {
+  if (!local) return null;
+  const d = new Date(local);
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
 
 function Dashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -248,19 +270,35 @@ function Dashboard() {
       // Time range → from/to params for backend
       if (timeRange) {
         const now = new Date();
+        const dayMs = 24 * 60 * 60 * 1000;
         if (timeRange === 'today') {
           const startOfDay = new Date(now);
           startOfDay.setHours(0, 0, 0, 0);
           params.set('from', startOfDay.toISOString());
+        } else if (timeRange === 'yesterday') {
+          const start = new Date(now);
+          start.setDate(start.getDate() - 1);
+          start.setHours(0, 0, 0, 0);
+          const end = new Date(start);
+          end.setHours(23, 59, 59, 999);
+          params.set('from', start.toISOString());
+          params.set('to', end.toISOString());
         } else if (timeRange === '5m') {
           params.set('from', new Date(now.getTime() - 5 * 60 * 1000).toISOString());
         } else if (timeRange === '15m') {
           params.set('from', new Date(now.getTime() - 15 * 60 * 1000).toISOString());
         } else if (timeRange === '1h') {
           params.set('from', new Date(now.getTime() - 60 * 60 * 1000).toISOString());
+        } else if (timeRange === '7d') {
+          params.set('from', new Date(now.getTime() - 7 * dayMs).toISOString());
+        } else if (timeRange === '30d') {
+          params.set('from', new Date(now.getTime() - 30 * dayMs).toISOString());
         } else if (timeRange.includes(',')) {
-          // Custom range: "from,to" format
-          const [fromStr, toStr] = timeRange.split(',');
+          // Custom range: "from,to" format. Auto-swap if user entered them in the wrong order.
+          let [fromStr, toStr] = timeRange.split(',');
+          if (fromStr && toStr && new Date(fromStr) > new Date(toStr)) {
+            [fromStr, toStr] = [toStr, fromStr];
+          }
           if (fromStr) params.set('from', fromStr);
           if (toStr) params.set('to', toStr);
         }
@@ -551,7 +589,7 @@ function Dashboard() {
               value={timeRange.includes(',') ? 'custom' : timeRange}
               onChange={(e) => {
                 if (e.target.value === 'custom') {
-                  // Default custom range: last 24 hours
+                  // Default custom range: last 24 hours (as ISO UTC; picker converts to local)
                   const now = new Date();
                   const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
                   updateParam('time', `${yesterday.toISOString()},${now.toISOString()}`);
@@ -566,31 +604,53 @@ function Dashboard() {
               <option value="15m">Last 15 min</option>
               <option value="1h">Last hour</option>
               <option value="today">Today</option>
+              <option value="yesterday">Yesterday</option>
+              <option value="7d">Last 7 days</option>
+              <option value="30d">Last 30 days</option>
               <option value="custom">Custom range...</option>
             </select>
-            {timeRange.includes(',') && (
-              <div className="flex items-center gap-1">
-                <input
-                  type="datetime-local"
-                  value={timeRange.split(',')[0]?.slice(0, 16) || ''}
-                  onChange={(e) => {
-                    const to = timeRange.split(',')[1] || new Date().toISOString();
-                    updateParam('time', `${new Date(e.target.value).toISOString()},${to}`);
-                  }}
-                  className="px-2 py-1.5 border border-[#30363d] rounded text-xs bg-[#0d1117] text-gray-300"
-                />
-                <span className="text-gray-500 text-xs">to</span>
-                <input
-                  type="datetime-local"
-                  value={timeRange.split(',')[1]?.slice(0, 16) || ''}
-                  onChange={(e) => {
-                    const from = timeRange.split(',')[0] || '';
-                    updateParam('time', `${from},${new Date(e.target.value).toISOString()}`);
-                  }}
-                  className="px-2 py-1.5 border border-[#30363d] rounded text-xs bg-[#0d1117] text-gray-300"
-                />
-              </div>
-            )}
+            {timeRange.includes(',') && (() => {
+              const [fromIso, toIso] = timeRange.split(',');
+              const setFrom = (localVal: string) => {
+                const newIso = localInputToIso(localVal);
+                // If the user clears the field, drop back to All Time so they aren't stuck.
+                if (!newIso) { updateParam('time', ''); return; }
+                updateParam('time', `${newIso},${toIso || new Date().toISOString()}`);
+              };
+              const setTo = (localVal: string) => {
+                const newIso = localInputToIso(localVal);
+                if (!newIso) { updateParam('time', ''); return; }
+                updateParam('time', `${fromIso || ''},${newIso}`);
+              };
+              return (
+                <div className="flex items-center gap-1 px-2 py-1 rounded bg-[#161b22] border border-[#30363d]">
+                  <label className="text-gray-500 text-xs select-none">From</label>
+                  <input
+                    type="datetime-local"
+                    value={isoToLocalInput(fromIso || '')}
+                    onChange={(e) => setFrom(e.target.value)}
+                    className="px-1.5 py-0.5 border border-[#30363d] rounded text-xs bg-[#0d1117] text-gray-300 [color-scheme:dark]"
+                  />
+                  <label className="text-gray-500 text-xs select-none">To</label>
+                  <input
+                    type="datetime-local"
+                    value={isoToLocalInput(toIso || '')}
+                    onChange={(e) => setTo(e.target.value)}
+                    className="px-1.5 py-0.5 border border-[#30363d] rounded text-xs bg-[#0d1117] text-gray-300 [color-scheme:dark]"
+                  />
+                  <button
+                    onClick={() => updateParam('time', '')}
+                    className="ml-1 p-0.5 text-gray-500 hover:text-gray-200 hover:bg-[#30363d] rounded"
+                    title="Clear custom range"
+                    aria-label="Clear custom range"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              );
+            })()}
 
             {/* Type Filter */}
             <select
