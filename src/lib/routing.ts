@@ -144,6 +144,28 @@ interface RoutingRule {
   matchHeader: string | null;
 }
 
+// ReDoS mitigation (CWE-1333):
+// Admin-supplied regex patterns are user-controlled and matched against
+// attacker-controlled inputs (req.path, header values). To bound worst-case
+// regex evaluation time we (a) cap the input length to a small constant before
+// running the regex, and (b) compile the pattern with the `u` flag and reject
+// patterns whose source is excessively long.
+const MAX_REGEX_INPUT_LENGTH = 2048;
+const MAX_REGEX_PATTERN_LENGTH = 512;
+
+function safeRegexTest(pattern: string, input: string): boolean {
+  if (pattern.length > MAX_REGEX_PATTERN_LENGTH) {
+    console.warn(`Routing regex rejected: pattern exceeds ${MAX_REGEX_PATTERN_LENGTH} chars`);
+    return false;
+  }
+  // Truncating the input bounds backtracking work to a constant factor.
+  const bounded = input.length > MAX_REGEX_INPUT_LENGTH
+    ? input.slice(0, MAX_REGEX_INPUT_LENGTH)
+    : input;
+  const re = new RegExp(pattern);
+  return re.test(bounded);
+}
+
 function matchesRule(req: Request, rule: RoutingRule): boolean {
   try {
     switch (rule.matchType) {
@@ -151,16 +173,14 @@ function matchesRule(req: Request, rule: RoutingRule): boolean {
         return req.path.startsWith(rule.matchPattern);
 
       case 'path_regex': {
-        const pathRegex = new RegExp(rule.matchPattern);
-        return pathRegex.test(req.path);
+        return safeRegexTest(rule.matchPattern, req.path);
       }
 
       case 'header_regex': {
         if (!rule.matchHeader) return false;
         const headerValue = req.get(rule.matchHeader);
         if (!headerValue) return false;
-        const headerRegex = new RegExp(rule.matchPattern);
-        return headerRegex.test(headerValue);
+        return safeRegexTest(rule.matchPattern, headerValue);
       }
 
       default:

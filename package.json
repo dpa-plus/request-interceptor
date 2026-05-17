@@ -11,6 +11,10 @@
     "lint": "eslint src --ext .ts",
     "clean": "rm -rf dist"
   },
+  "overrides": {
+    "socket.io-parser": "^4.2.6",
+    "path-to-regexp": "0.1.13"
+  },
   "dependencies": {
     "@prisma/client": "^6.2.1",
     "cors": "^2.8.5",
