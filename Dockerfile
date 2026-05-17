@@ -55,8 +55,8 @@ COPY --from=backend-build /app/src/generated ./dist/generated/
 # Copy built frontend
 COPY --from=frontend-build /app/dist/public ./dist/public/
 
-# Create data directory for SQLite
-RUN mkdir -p /data
+# Create data directory for SQLite and set ownership for non-root user
+RUN mkdir -p /data && chown -R node:node /data /app
 
 # Environment
 ENV NODE_ENV=production
@@ -66,6 +66,9 @@ ENV PORT_PROXY=3001
 
 # Expose ports
 EXPOSE 3000 3001
+
+# Drop to non-root user for runtime
+USER node
 
 # Run migrations and start
 CMD npx prisma migrate deploy && npm start
