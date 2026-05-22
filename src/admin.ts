@@ -9,8 +9,36 @@ import { getModelInfo, getContextLength } from './lib/modelInfoService.js';
 import { invalidateRoutingCache } from './lib/routing.js';
 import { readMediaFile, mimeFromExt } from './lib/mediaStorage.js';
 import { rehydrateInlineMedia } from './lib/multimodalProcessor.js';
+import { getAuthMode, getGoogleConfig, isAccountAllowed, resolvePublicAdminUrl, isHttpsRequest } from './lib/authConfig.js';
+import {
+  buildSessionCookie,
+  buildClearSessionCookie,
+  readSessionFromHeader,
+  signSession,
+  verifySession,
+  getSessionTtlSeconds,
+} from './lib/sessionCookie.js';
+import {
+  buildAuthorizationUrl,
+  buildStateCookie,
+  clearStateCookie,
+  exchangeCodeForTokens,
+  fetchUserInfo,
+  getStateCookieName,
+  parseStateToken,
+} from './lib/googleOAuth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+function readNamedCookie(header: string | undefined, name: string): string | null {
+  if (!header) return null;
+  for (const seg of header.split(';')) {
+    const eq = seg.indexOf('=');
+    if (eq < 0) continue;
+    if (seg.slice(0, eq).trim() === name) return seg.slice(eq + 1).trim();
+  }
+  return null;
+}
 
 export function createAdminApp() {
   const app = express();
@@ -26,6 +54,138 @@ export function createAdminApp() {
   // Health check (no auth)
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
+  // ==================== AUTH ====================
+  // These routes are deliberately mounted BEFORE the adminAuth middleware so
+  // the login + callback can run without a session.
+
+  // Public: tells the frontend which auth mode is active and where to send
+  // unauthenticated users.
+  app.get('/api/auth/config', (_req, res) => {
+    const mode = getAuthMode();
+    res.json({
+      mode,
+      loginUrl: mode === 'google' ? '/auth/google/login' : null,
+    });
+  });
+
+  // Public: current session info, or 401 if unauthenticated.
+  app.get('/api/auth/me', (req, res) => {
+    const mode = getAuthMode();
+    if (mode === 'basic') {
+      // In basic mode the browser handles the prompt — if the request reaches
+      // here it's because the user is already authenticated by basicAuth at
+      // the /api/* layer. For /api/auth/me we'd never get here without basic
+      // auth either; fall through to a static "basic" identity.
+      const header = (req.headers.authorization || '') as string;
+      if (!header.toLowerCase().startsWith('basic ')) {
+        res.status(401).json({ requiresLogin: false, mode: 'basic' });
+        return;
+      }
+      res.json({ mode: 'basic', user: { name: process.env.ADMIN_USER || 'admin' } });
+      return;
+    }
+    // Google mode
+    const session = verifySession(readSessionFromHeader(req.headers.cookie));
+    if (!session) {
+      res.status(401).json({ requiresLogin: true, loginUrl: '/auth/google/login', mode: 'google' });
+      return;
+    }
+    res.json({
+      mode: 'google',
+      user: {
+        email: session.email,
+        name: session.name,
+        picture: session.picture,
+      },
+    });
+  });
+
+  // Step 1: start OAuth flow. Redirects to Google's consent screen.
+  app.get('/auth/google/login', (req, res) => {
+    if (getAuthMode() !== 'google') {
+      res.status(404).send('OAuth is not enabled.');
+      return;
+    }
+    const cfg = getGoogleConfig();
+    if (!cfg.clientId || !cfg.clientSecret) {
+      res.status(500).send('Google OAuth is enabled but client credentials are not configured.');
+      return;
+    }
+    const returnTo = typeof req.query.returnTo === 'string' && req.query.returnTo.startsWith('/')
+      ? req.query.returnTo
+      : '/';
+    const secure = isHttpsRequest(req);
+    const { token: state, cookie: stateCookie } = buildStateCookie(returnTo, secure);
+    const redirectUri = `${resolvePublicAdminUrl(req, cfg)}/auth/google/callback`;
+    const authUrl = buildAuthorizationUrl({ cfg, redirectUri, state, returnTo });
+    res.setHeader('Set-Cookie', stateCookie);
+    res.redirect(302, authUrl);
+  });
+
+  // Step 2: Google redirects back with `code` + `state`. Verify state,
+  // exchange code for tokens, fetch userinfo, check allow-list, set session.
+  app.get('/auth/google/callback', async (req, res) => {
+    if (getAuthMode() !== 'google') {
+      res.status(404).send('OAuth is not enabled.');
+      return;
+    }
+    const cfg = getGoogleConfig();
+    const secure = isHttpsRequest(req);
+    const code = typeof req.query.code === 'string' ? req.query.code : '';
+    const state = typeof req.query.state === 'string' ? req.query.state : '';
+    const cookieState = readNamedCookie(req.headers.cookie, getStateCookieName());
+
+    // Always clear the state cookie on the way out
+    const setCookies: string[] = [clearStateCookie(secure)];
+
+    if (!code || !state || !cookieState || state !== cookieState) {
+      res.setHeader('Set-Cookie', setCookies);
+      res.status(400).send('OAuth state mismatch — please retry from the login screen.');
+      return;
+    }
+
+    const parsedState = parseStateToken(state);
+    const returnTo = parsedState?.returnTo || '/';
+
+    try {
+      const redirectUri = `${resolvePublicAdminUrl(req, cfg)}/auth/google/callback`;
+      const tokens = await exchangeCodeForTokens({ cfg, code, redirectUri });
+      const user = await fetchUserInfo(tokens.access_token);
+
+      if (!user.email || !user.email_verified) {
+        res.setHeader('Set-Cookie', setCookies);
+        res.status(403).send('Google account email is not verified.');
+        return;
+      }
+      if (!isAccountAllowed(user.email, cfg)) {
+        res.setHeader('Set-Cookie', setCookies);
+        res.status(403).send(`Account ${user.email} is not on the allow-list.`);
+        return;
+      }
+
+      const sessionToken = signSession({
+        sub: user.sub,
+        email: user.email,
+        name: user.name,
+        picture: user.picture,
+      });
+      setCookies.push(buildSessionCookie(sessionToken, { secure, maxAge: getSessionTtlSeconds() }));
+      res.setHeader('Set-Cookie', setCookies);
+      res.redirect(302, returnTo);
+    } catch (err) {
+      console.error('[OAuth] Callback failed:', err);
+      res.setHeader('Set-Cookie', setCookies);
+      res.status(500).send('Sign-in failed. Please try again.');
+    }
+  });
+
+  // Logout — clears the session cookie. Works in both modes (no-op for basic).
+  app.post('/api/auth/logout', (req, res) => {
+    const secure = isHttpsRequest(req);
+    res.setHeader('Set-Cookie', buildClearSessionCookie({ secure }));
+    res.json({ ok: true });
   });
 
   // Protected API routes
