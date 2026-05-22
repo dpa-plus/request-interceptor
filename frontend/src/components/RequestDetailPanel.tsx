@@ -3,6 +3,7 @@ import { SmartBodyViewer } from './SmartBodyViewer';
 import { HeadersTable } from './HeadersTable';
 import { CopyButton, InlineCopyButton } from './CopyButton';
 import { generateCurl } from '../utils/curlGenerator';
+import { ContentPartsRenderer, ContentPart } from './ContentPartsRenderer';
 
 // Unified message shape as stored by src/lib/aiDetector.ts (camelCase)
 interface ToolCall {
@@ -18,6 +19,9 @@ interface ConversationMessage {
   toolName?: string;
   hasImages?: boolean;
   imageCount?: number;
+  hasAudio?: boolean;
+  audioCount?: number;
+  contentParts?: ContentPart[];
 }
 
 // Try to JSON-parse a string; if it parses, return pretty-printed JSON. Else return original.
@@ -30,6 +34,20 @@ function prettyIfJson(value: string): { text: string; isJson: boolean } {
   } catch {
     return { text: value, isJson: false };
   }
+}
+
+function contentPartsToText(parts: ContentPart[]): string {
+  const out: string[] = [];
+  for (const p of parts) {
+    if (p.type === 'text') out.push(p.text);
+    else if (p.type === 'reasoning') out.push(`[reasoning]\n${p.text}`);
+    else if (p.type === 'image') out.push('[image]');
+    else if (p.type === 'audio') out.push(p.transcript ? `[audio: ${p.transcript}]` : '[audio]');
+    else if (p.type === 'video') out.push('[video]');
+    else if (p.type === 'file') out.push(p.filename ? `[file: ${p.filename}]` : '[file]');
+    else if (p.type === 'file_annotation') out.push(`[parsed file: ${p.name ?? p.hash.slice(0, 8)}]`);
+  }
+  return out.join('\n').trim();
 }
 
 // Render-ready text for a single message (used for per-message copy + display fallback)
@@ -47,6 +65,9 @@ function messageToText(msg: ConversationMessage): string {
   if (msg.role === 'tool') {
     const header = msg.toolName ? `[tool: ${msg.toolName}]\n` : '';
     return header + (typeof msg.content === 'string' ? prettyIfJson(msg.content).text : '');
+  }
+  if (msg.contentParts && msg.contentParts.length > 0) {
+    return contentPartsToText(msg.contentParts);
   }
   return typeof msg.content === 'string' ? msg.content : '';
 }
@@ -464,6 +485,16 @@ export function RequestDetailPanel({ requestId }: Props) {
                                   ← <span className="text-amber-300 font-mono">{msg.toolName}</span>
                                 </span>
                               )}
+                              {msg.imageCount && msg.imageCount > 0 ? (
+                                <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-900/40 text-blue-300 normal-case">
+                                  {msg.imageCount} image{msg.imageCount > 1 ? 's' : ''}
+                                </span>
+                              ) : null}
+                              {msg.audioCount && msg.audioCount > 0 ? (
+                                <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-900/40 text-amber-300 normal-case">
+                                  {msg.audioCount} audio
+                                </span>
+                              ) : null}
                               {copyText && <InlineCopyButton text={copyText} alwaysVisible />}
                             </div>
                             <MessageBubble msg={msg} colors={colors} />
@@ -523,17 +554,26 @@ interface MessageBubbleProps {
 // Renders a single message bubble with role-specific formatting:
 // - assistant + tool_calls: shows each tool call as "→ tool_name(...pretty args...)"
 // - tool: shows "← tool_name → <pretty JSON of content>"
+// - multimodal (contentParts): images/audio/video/file/reasoning inline
 // - others: plain content, whitespace preserved
 function MessageBubble({ msg, colors }: MessageBubbleProps) {
-  const bubbleCls = `${colors.bg} border ${colors.border} rounded-lg p-2.5 text-xs text-gray-300 whitespace-pre-wrap break-words overflow-auto max-h-96`;
+  // Outer bubble — overflow is hidden so big children clip cleanly; inner content scrolls.
+  const bubbleCls = `${colors.bg} border ${colors.border} rounded-lg p-2.5 text-xs text-gray-300 break-words overflow-auto max-h-[32rem]`;
 
-  // Assistant with tool calls — render the call(s) instead of (or alongside) blank content
+  // Structured multimodal content takes precedence when present
+  const hasParts = !!(msg.contentParts && msg.contentParts.length > 0);
+
+  // Assistant with tool calls — render call(s) AND any multimodal parts
   if (msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0) {
     return (
       <div className={bubbleCls}>
-        {msg.content && msg.content.trim() !== '' && (
-          <div className="mb-2">{msg.content}</div>
-        )}
+        {hasParts ? (
+          <div className="mb-2">
+            <ContentPartsRenderer parts={msg.contentParts!} />
+          </div>
+        ) : msg.content && msg.content.trim() !== '' ? (
+          <div className="mb-2 whitespace-pre-wrap">{msg.content}</div>
+        ) : null}
         <div className="space-y-1.5">
           {msg.toolCalls.map((tc, idx) => {
             const name = tc.function?.name || 'unknown';
@@ -575,10 +615,17 @@ function MessageBubble({ msg, colors }: MessageBubbleProps) {
     );
   }
 
-  // Default (system/user/assistant-with-text)
+  // Default (system/user/assistant-with-text or multimodal)
+  if (hasParts) {
+    return (
+      <div className={bubbleCls}>
+        <ContentPartsRenderer parts={msg.contentParts!} />
+      </div>
+    );
+  }
   const content = typeof msg.content === 'string' ? msg.content : '';
   return (
-    <div className={bubbleCls}>
+    <div className={`${bubbleCls} whitespace-pre-wrap`}>
       {content || <span className="text-gray-500 italic">(no content)</span>}
     </div>
   );

@@ -1,7 +1,15 @@
+import fs from 'fs/promises';
 import { prisma } from './prisma.js';
+import { listAllMediaFiles } from './mediaStorage.js';
+import {
+  getAuthHeaderRetentionDays,
+  redactSensitiveHeaders,
+  REDACTED_VALUE,
+} from './headerRedaction.js';
 
 const LOG_RETENTION_DAYS = 30;
-const AUTH_HEADER_RETENTION_DAYS = 3;
+// Media files orphaned from any DB row are deleted after this many days
+const MEDIA_ORPHAN_GRACE_DAYS = 1;
 
 /**
  * Delete request logs older than the retention period.
@@ -37,13 +45,16 @@ async function deleteOldLogs(): Promise<number> {
 
 /**
  * Remove authorization headers from logs older than the retention period.
- * This sanitizes sensitive data while keeping the log entries.
+ * Skipped entirely when AUTH_HEADER_RETENTION_DAYS=0 — in that mode headers
+ * are scrubbed at write-time by the proxy, so nothing remains to clean up.
  */
 async function sanitizeOldAuthHeaders(): Promise<number> {
-  const cutoffDate = new Date();
-  cutoffDate.setDate(cutoffDate.getDate() - AUTH_HEADER_RETENTION_DAYS);
+  const retentionDays = getAuthHeaderRetentionDays();
+  if (retentionDays === 0) return 0;
 
-  // Find logs with headers that might contain auth data
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+
   const logsToSanitize = await prisma.requestLog.findMany({
     where: {
       createdAt: { lt: cutoffDate },
@@ -58,32 +69,16 @@ async function sanitizeOldAuthHeaders(): Promise<number> {
     if (!log.headers) continue;
 
     try {
-      const headers = JSON.parse(log.headers);
-      let modified = false;
+      const headers = JSON.parse(log.headers) as Record<string, unknown>;
+      const redacted = redactSensitiveHeaders(headers);
+      const wasModified = Object.keys(redacted).some(
+        (k) => redacted[k] === REDACTED_VALUE && headers[k] !== REDACTED_VALUE
+      );
 
-      // List of sensitive headers to redact
-      const sensitiveHeaders = [
-        'authorization',
-        'x-api-key',
-        'api-key',
-        'x-auth-token',
-        'cookie',
-        'set-cookie',
-      ];
-
-      for (const key of Object.keys(headers)) {
-        if (sensitiveHeaders.includes(key.toLowerCase())) {
-          if (headers[key] !== '[REDACTED]') {
-            headers[key] = '[REDACTED]';
-            modified = true;
-          }
-        }
-      }
-
-      if (modified) {
+      if (wasModified) {
         await prisma.requestLog.update({
           where: { id: log.id },
-          data: { headers: JSON.stringify(headers) },
+          data: { headers: JSON.stringify(redacted) },
         });
         sanitizedCount++;
       }
@@ -93,6 +88,51 @@ async function sanitizeOldAuthHeaders(): Promise<number> {
   }
 
   return sanitizedCount;
+}
+
+/**
+ * Garbage-collect media files that are no longer referenced by any AiRequest row.
+ * A file is considered orphaned only if it hasn't been referenced AND its mtime is
+ * older than MEDIA_ORPHAN_GRACE_DAYS (so newly-stored files aren't deleted before
+ * the row that references them is committed).
+ */
+async function deleteOrphanMedia(): Promise<number> {
+  const files = await listAllMediaFiles();
+  if (files.length === 0) return 0;
+
+  // Build a set of referenced hashes by scanning AiRequest.messages and
+  // fullRequest/fullResponse. SQLite LIKE-scan is acceptable since these
+  // columns are small after stripping (hash is a fixed 64-char hex).
+  const referenced = new Set<string>();
+  const rows = await prisma.aiRequest.findMany({
+    select: { messages: true, fullRequest: true, fullResponse: true },
+  });
+
+  const HASH_RE = /media:([a-f0-9]{64})\.[a-z0-9]{1,8}/gi;
+  for (const row of rows) {
+    for (const blob of [row.messages, row.fullRequest, row.fullResponse]) {
+      if (!blob) continue;
+      let m: RegExpExecArray | null;
+      HASH_RE.lastIndex = 0;
+      while ((m = HASH_RE.exec(blob)) !== null) {
+        referenced.add(m[1].toLowerCase());
+      }
+    }
+  }
+
+  const graceCutoff = Date.now() - MEDIA_ORPHAN_GRACE_DAYS * 24 * 60 * 60 * 1000;
+  let deleted = 0;
+  for (const f of files) {
+    if (referenced.has(f.hash)) continue;
+    if (f.mtimeMs >= graceCutoff) continue;
+    try {
+      await fs.unlink(f.fullPath);
+      deleted++;
+    } catch {
+      // ignore
+    }
+  }
+  return deleted;
 }
 
 /**
@@ -109,7 +149,12 @@ export async function runCleanup(): Promise<void> {
 
     const sanitizedHeaders = await sanitizeOldAuthHeaders();
     if (sanitizedHeaders > 0) {
-      console.log(`[Cleanup] Sanitized auth headers in ${sanitizedHeaders} logs older than ${AUTH_HEADER_RETENTION_DAYS} days`);
+      console.log(`[Cleanup] Sanitized auth headers in ${sanitizedHeaders} logs older than ${getAuthHeaderRetentionDays()} days`);
+    }
+
+    const orphanMedia = await deleteOrphanMedia();
+    if (orphanMedia > 0) {
+      console.log(`[Cleanup] Deleted ${orphanMedia} orphan media files`);
     }
 
     console.log('[Cleanup] Cleanup job completed');
@@ -131,4 +176,10 @@ export function startCleanupScheduler(): void {
   setInterval(runCleanup, HOUR_MS);
 
   console.log('[Cleanup] Scheduler started (runs every hour)');
+  const retention = getAuthHeaderRetentionDays();
+  console.log(
+    retention === 0
+      ? '[Cleanup] Auth headers: redacted immediately at write-time (AUTH_HEADER_RETENTION_DAYS=0)'
+      : `[Cleanup] Auth headers: kept plaintext for ${retention} day(s), then redacted`
+  );
 }

@@ -59,10 +59,12 @@ import {
   ConversationMessage,
   ParsedAiResponse,
 } from './lib/aiDetector.js';
+import { stripInlineMedia } from './lib/multimodalProcessor.js';
+import { redactHeadersForStorage } from './lib/headerRedaction.js';
 
 /**
- * Add the assistant response (including tool calls) to the messages array.
- * This creates a complete conversation including the AI's response.
+ * Add the assistant response (including tool calls and any multimodal parts)
+ * to the messages array. This creates a complete conversation including the AI's response.
  */
 function buildMessagesWithResponse(
   requestMessages: ConversationMessage[],
@@ -70,12 +72,16 @@ function buildMessagesWithResponse(
 ): ConversationMessage[] {
   const messages = [...requestMessages];
 
-  // Only add response if there's content or tool calls
-  if (parsedResponse.assistantResponse || (parsedResponse.toolCalls && parsedResponse.toolCalls.length > 0)) {
+  const hasParts = !!(parsedResponse.assistantContentParts && parsedResponse.assistantContentParts.length > 0);
+  const hasText = !!parsedResponse.assistantResponse;
+  const hasTools = !!(parsedResponse.toolCalls && parsedResponse.toolCalls.length > 0);
+
+  if (hasParts || hasText || hasTools) {
     messages.push({
       role: 'assistant',
       content: parsedResponse.assistantResponse,
       toolCalls: parsedResponse.toolCalls,
+      contentParts: hasParts ? parsedResponse.assistantContentParts : undefined,
     });
   }
 
@@ -200,7 +206,7 @@ export function createProxyApp() {
               url: req.originalUrl,
               path: req.path,
               queryParams: safeJsonStringify(req.query),
-              headers: safeJsonStringify(req.headers),
+              headers: safeJsonStringify(redactHeadersForStorage(req.headers as Record<string, unknown>)),
               body,
               bodyTruncated: truncated,
               bodySize: size,
@@ -235,14 +241,24 @@ export function createProxyApp() {
       if (isAi && req.body) {
         try {
           requestBodyParsed = JSON.parse(req.body.toString());
+          // Extract inline media (base64 images / audio / PDFs / video) out of the
+          // parsed body and replace with `media:<hash>.<ext>` refs. The original
+          // request bytes (req.body) are unchanged and forwarded as-is upstream.
+          await stripInlineMedia(requestBodyParsed);
           parsedAiReq = parseAiRequest(requestBodyParsed, req.path, targetUrl, req.headers as Record<string, any>);
         } catch {
           // Not valid JSON, treat as regular request
         }
       }
 
-      // Prepare request body info for logging
-      const { body: logBody, truncated: bodyTruncated, size: bodySize } = processBody(req.body, maxBodySize);
+      // Prepare request body info for logging. For AI requests where we've
+      // already extracted inline media (base64 → media: refs), log the
+      // stripped JSON instead of the raw request bytes — otherwise the
+      // `body` column would still carry every base64 image.
+      const bodyForLog = (isAi && requestBodyParsed)
+        ? Buffer.from(safeJsonStringify(requestBodyParsed))
+        : req.body;
+      const { body: logBody, truncated: bodyTruncated, size: bodySize } = processBody(bodyForLog, maxBodySize);
 
       // Create initial log entry (skip static assets like .js, .css, images, etc.)
       let logId: string | null = null;
@@ -254,7 +270,7 @@ export function createProxyApp() {
             url: req.originalUrl,
             path: req.path,
             queryParams: safeJsonStringify(cleanQuery),
-            headers: safeJsonStringify(req.headers),
+            headers: safeJsonStringify(redactHeadersForStorage(req.headers as Record<string, unknown>)),
             body: logBody,
             bodyTruncated,
             bodySize,
@@ -424,8 +440,10 @@ async function handleStreamingResponse(
   const { chunks, timeToFirstToken } = collector.getResult();
   const responseTime = Date.now() - startTime;
 
-  // Parse streamed response
-  const parsedResponse = parseStreamedResponse(chunks);
+  // Parse streamed response (async: extracts audio chunks → media storage)
+  const parsedResponse = await parseStreamedResponse(chunks);
+  // Strip inline media from the collected chunks (images embedded in delta.images, etc.)
+  await stripInlineMedia(parsedResponse.fullResponse);
 
   // Calculate cost
   const cost = await calculateCost(
@@ -482,7 +500,7 @@ async function handleStreamingResponse(
         where: { id: logId },
         data: {
           statusCode: proxyRes.statusCode,
-          responseHeaders: safeJsonStringify(proxyRes.headers),
+          responseHeaders: safeJsonStringify(redactHeadersForStorage(proxyRes.headers as Record<string, unknown>)),
           responseBody: '[Streaming response - see AI request details]',
           responseSize,
           responseTime,
@@ -515,7 +533,7 @@ async function handleStreamingResponse(
           where: { id: logId },
           data: {
             statusCode: proxyRes.statusCode,
-            responseHeaders: safeJsonStringify(proxyRes.headers),
+            responseHeaders: safeJsonStringify(redactHeadersForStorage(proxyRes.headers as Record<string, unknown>)),
             responseBody: '[Streaming response - logging failed]',
             responseSize: chunks.join('').length,
             responseTime,
@@ -576,17 +594,12 @@ async function handleRegularResponse(
   const contentEncoding = proxyRes.headers['content-encoding'] as string | undefined;
   const decompressedBuffer = await decompressBuffer(responseBuffer, contentEncoding);
 
-  // Process response for logging
-  const { body: responseBody, truncated: responseTruncated, size: responseSize } = processBody(
-    decompressedBuffer,
-    maxBodySize
-  );
-
-  // Parse AI response if applicable
+  // Parse AI response if applicable. For AI responses we strip inline media
+  // up front so it never reaches the DB (neither aiRequest.fullResponse nor
+  // requestLog.responseBody).
   let aiRequestId: string | null = null;
-
+  let parsedBody: any = null;
   if (isAi && parsedAiReq && logEnabled) {
-    let parsedBody: any = null;
     try {
       parsedBody = JSON.parse(decompressedBuffer.toString());
     } catch {
@@ -595,6 +608,9 @@ async function handleRegularResponse(
 
     if (parsedBody) {
       try {
+        // Extract inline media (output images, audio data, parsed PDF annotations)
+        // before storing the response in the DB.
+        await stripInlineMedia(parsedBody);
         const parsedResponse = parseAiResponse(parsedBody, false);
         const cost = await calculateCost(
           parsedResponse.model || parsedAiReq.model,
@@ -651,13 +667,23 @@ async function handleRegularResponse(
     }
   }
 
+  // Process response body for logging — prefer the media-stripped JSON for
+  // AI responses so base64 image/audio output never lands in responseBody.
+  const responseBufferForLog = parsedBody
+    ? Buffer.from(safeJsonStringify(parsedBody))
+    : decompressedBuffer;
+  const { body: responseBody, truncated: responseTruncated, size: responseSize } = processBody(
+    responseBufferForLog,
+    maxBodySize
+  );
+
   // Update log
   if (logId && logEnabled) {
     await prisma.requestLog.update({
       where: { id: logId },
       data: {
         statusCode: proxyRes.statusCode,
-        responseHeaders: safeJsonStringify(proxyRes.headers),
+        responseHeaders: safeJsonStringify(redactHeadersForStorage(proxyRes.headers as Record<string, unknown>)),
         responseBody,
         responseTruncated,
         responseSize,

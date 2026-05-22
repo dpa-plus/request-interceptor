@@ -7,6 +7,8 @@ import { adminAuth, rateLimiter } from './middleware/adminAuth.js';
 import { getModelInfo as getOpenRouterModelInfo, getAllModels, getCacheStats as getOpenRouterCacheStats, refreshCache as refreshOpenRouterCache } from './lib/openRouterModels.js';
 import { getModelInfo, getContextLength } from './lib/modelInfoService.js';
 import { invalidateRoutingCache } from './lib/routing.js';
+import { readMediaFile, mimeFromExt } from './lib/mediaStorage.js';
+import { rehydrateInlineMedia } from './lib/multimodalProcessor.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -423,6 +425,10 @@ export function createAdminApp() {
       const targetUrl = originalRequest.requestLog.targetUrl;
       const path = originalRequest.requestLog.path;
 
+      // Rehydrate `media:<hash>.<ext>` refs back into data: URLs so the
+      // replayed request is wire-compatible with the original upstream call.
+      const hydratedBody = await rehydrateInlineMedia(requestBody);
+
       // Return the modified request data for the frontend to execute
       // (We don't proxy directly from admin to avoid auth issues)
       res.json({
@@ -436,7 +442,7 @@ export function createAdminApp() {
             // Preserve auth header if present (frontend should handle this)
             ...(originalHeaders.authorization ? { Authorization: originalHeaders.authorization } : {}),
           },
-          body: requestBody,
+          body: hydratedBody,
         },
         original: {
           id: originalRequest.id,
@@ -719,6 +725,39 @@ export function createAdminApp() {
     } catch (error) {
       console.error('Error fetching stats:', error);
       res.status(500).json({ error: 'Failed to fetch stats' });
+    }
+  });
+
+  // ==================== MEDIA ====================
+
+  // Serve a stored media blob (image / audio / video / pdf etc).
+  // Path: /api/media/:hash.:ext (e.g. /api/media/abcd1234...png)
+  app.get('/api/media/:file', async (req, res) => {
+    try {
+      const file = req.params.file;
+      const dot = file.lastIndexOf('.');
+      if (dot < 0) {
+        res.status(400).json({ error: 'Invalid media path' });
+        return;
+      }
+      const hash = file.slice(0, dot);
+      const ext = file.slice(dot + 1);
+      if (!/^[a-f0-9]{64}$/.test(hash) || !/^[a-z0-9]{1,8}$/i.test(ext)) {
+        res.status(400).json({ error: 'Invalid media path' });
+        return;
+      }
+      const bytes = await readMediaFile(hash, ext);
+      if (!bytes) {
+        res.status(404).json({ error: 'Media not found' });
+        return;
+      }
+      res.setHeader('Content-Type', mimeFromExt(ext));
+      res.setHeader('Cache-Control', 'private, max-age=86400, immutable');
+      res.setHeader('Content-Length', bytes.length.toString());
+      res.send(bytes);
+    } catch (error) {
+      console.error('Error serving media:', error);
+      res.status(500).json({ error: 'Failed to serve media' });
     }
   });
 
