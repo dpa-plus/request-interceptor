@@ -25,6 +25,9 @@
     "http-proxy-middleware": "^3.0.3",
     "socket.io": "^4.8.3"
   },
+  "overrides": {
+    "socket.io-parser": "^4.2.6"
+  },
   "devDependencies": {
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",

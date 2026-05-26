@@ -17,6 +17,9 @@
     "react-router-dom": "^7.1.1",
     "socket.io-client": "^4.8.3"
   },
+  "overrides": {
+    "rollup": "^4.59.0"
+  },
   "devDependencies": {
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
