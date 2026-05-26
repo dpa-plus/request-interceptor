@@ -13,7 +13,10 @@
   },
   "overrides": {
     "socket.io-parser": "^4.2.6",
-    "path-to-regexp": "0.1.13"
+    "path-to-regexp": "0.1.13",
+    "follow-redirects": "^1.16.0",
+    "ws": "^8.20.1",
+    "picomatch": "^2.3.2"
   },
   "dependencies": {
     "@prisma/client": "^6.2.1",
