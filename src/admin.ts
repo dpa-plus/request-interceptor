@@ -7,8 +7,48 @@ import { adminAuth, rateLimiter } from './middleware/adminAuth.js';
 import { getModelInfo as getOpenRouterModelInfo, getAllModels, getCacheStats as getOpenRouterCacheStats, refreshCache as refreshOpenRouterCache } from './lib/openRouterModels.js';
 import { getModelInfo, getContextLength } from './lib/modelInfoService.js';
 import { invalidateRoutingCache } from './lib/routing.js';
+import { readMediaFile, mimeFromExt } from './lib/mediaStorage.js';
+import { rehydrateInlineMedia } from './lib/multimodalProcessor.js';
+import {
+  resolveRange,
+  getSummary,
+  getTimeseries,
+  getTopPrompts,
+  getLatency,
+  getOpenRouterStats,
+  Bucket,
+} from './lib/stats.js';
+import { getAuthMode, getGoogleConfig, isAccountAllowed, resolvePublicAdminUrl, isHttpsRequest } from './lib/authConfig.js';
+import {
+  buildSessionCookie,
+  buildClearSessionCookie,
+  readSessionFromHeader,
+  signSession,
+  verifySession,
+  getSessionTtlSeconds,
+} from './lib/sessionCookie.js';
+import {
+  buildAuthorizationUrl,
+  buildStateCookie,
+  clearStateCookie,
+  exchangeCodeForTokens,
+  fetchUserInfo,
+  getStateCookieName,
+  parseStateToken,
+  sanitizeReturnTo,
+} from './lib/googleOAuth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+function readNamedCookie(header: string | undefined, name: string): string | null {
+  if (!header) return null;
+  for (const seg of header.split(';')) {
+    const eq = seg.indexOf('=');
+    if (eq < 0) continue;
+    if (seg.slice(0, eq).trim() === name) return seg.slice(eq + 1).trim();
+  }
+  return null;
+}
 
 export function createAdminApp() {
   const app = express();
@@ -24,6 +64,138 @@ export function createAdminApp() {
   // Health check (no auth)
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
+  // ==================== AUTH ====================
+  // These routes are deliberately mounted BEFORE the adminAuth middleware so
+  // the login + callback can run without a session.
+
+  // Public: tells the frontend which auth mode is active and where to send
+  // unauthenticated users.
+  app.get('/api/auth/config', (_req, res) => {
+    const mode = getAuthMode();
+    res.json({
+      mode,
+      loginUrl: mode === 'google' ? '/auth/google/login' : null,
+    });
+  });
+
+  // Public: current session info, or 401 if unauthenticated.
+  app.get('/api/auth/me', (req, res) => {
+    const mode = getAuthMode();
+    if (mode === 'basic') {
+      // In basic mode the browser handles the prompt — if the request reaches
+      // here it's because the user is already authenticated by basicAuth at
+      // the /api/* layer. For /api/auth/me we'd never get here without basic
+      // auth either; fall through to a static "basic" identity.
+      const header = (req.headers.authorization || '') as string;
+      if (!header.toLowerCase().startsWith('basic ')) {
+        res.status(401).json({ requiresLogin: false, mode: 'basic' });
+        return;
+      }
+      res.json({ mode: 'basic', user: { name: process.env.ADMIN_USER || 'admin' } });
+      return;
+    }
+    // Google mode
+    const session = verifySession(readSessionFromHeader(req.headers.cookie));
+    if (!session) {
+      res.status(401).json({ requiresLogin: true, loginUrl: '/auth/google/login', mode: 'google' });
+      return;
+    }
+    res.json({
+      mode: 'google',
+      user: {
+        email: session.email,
+        name: session.name,
+        picture: session.picture,
+      },
+    });
+  });
+
+  // Step 1: start OAuth flow. Redirects to Google's consent screen.
+  app.get('/auth/google/login', (req, res) => {
+    if (getAuthMode() !== 'google') {
+      res.status(404).send('OAuth is not enabled.');
+      return;
+    }
+    const cfg = getGoogleConfig();
+    if (!cfg.clientId || !cfg.clientSecret) {
+      res.status(500).send('Google OAuth is enabled but client credentials are not configured.');
+      return;
+    }
+    const returnTo = typeof req.query.returnTo === 'string'
+      ? sanitizeReturnTo(req.query.returnTo)
+      : '/';
+    const secure = isHttpsRequest(req);
+    const { token: state, cookie: stateCookie } = buildStateCookie(returnTo, secure);
+    const redirectUri = `${resolvePublicAdminUrl(req, cfg)}/auth/google/callback`;
+    const authUrl = buildAuthorizationUrl({ cfg, redirectUri, state, returnTo });
+    res.setHeader('Set-Cookie', stateCookie);
+    res.redirect(302, authUrl);
+  });
+
+  // Step 2: Google redirects back with `code` + `state`. Verify state,
+  // exchange code for tokens, fetch userinfo, check allow-list, set session.
+  app.get('/auth/google/callback', async (req, res) => {
+    if (getAuthMode() !== 'google') {
+      res.status(404).send('OAuth is not enabled.');
+      return;
+    }
+    const cfg = getGoogleConfig();
+    const secure = isHttpsRequest(req);
+    const code = typeof req.query.code === 'string' ? req.query.code : '';
+    const state = typeof req.query.state === 'string' ? req.query.state : '';
+    const cookieState = readNamedCookie(req.headers.cookie, getStateCookieName());
+
+    // Always clear the state cookie on the way out
+    const setCookies: string[] = [clearStateCookie(secure)];
+
+    if (!code || !state || !cookieState || state !== cookieState) {
+      res.setHeader('Set-Cookie', setCookies);
+      res.status(400).send('OAuth state mismatch — please retry from the login screen.');
+      return;
+    }
+
+    const parsedState = parseStateToken(state);
+    const returnTo = parsedState?.returnTo || '/';
+
+    try {
+      const redirectUri = `${resolvePublicAdminUrl(req, cfg)}/auth/google/callback`;
+      const tokens = await exchangeCodeForTokens({ cfg, code, redirectUri });
+      const user = await fetchUserInfo(tokens.access_token);
+
+      if (!user.email || !user.email_verified) {
+        res.setHeader('Set-Cookie', setCookies);
+        res.status(403).send('Google account email is not verified.');
+        return;
+      }
+      if (!isAccountAllowed(user.email, cfg)) {
+        res.setHeader('Set-Cookie', setCookies);
+        res.status(403).send(`Account ${user.email} is not on the allow-list.`);
+        return;
+      }
+
+      const sessionToken = signSession({
+        sub: user.sub,
+        email: user.email,
+        name: user.name,
+        picture: user.picture,
+      });
+      setCookies.push(buildSessionCookie(sessionToken, { secure, maxAge: getSessionTtlSeconds() }));
+      res.setHeader('Set-Cookie', setCookies);
+      res.redirect(302, returnTo);
+    } catch (err) {
+      console.error('[OAuth] Callback failed:', err);
+      res.setHeader('Set-Cookie', setCookies);
+      res.status(500).send('Sign-in failed. Please try again.');
+    }
+  });
+
+  // Logout — clears the session cookie. Works in both modes (no-op for basic).
+  app.post('/api/auth/logout', (req, res) => {
+    const secure = isHttpsRequest(req);
+    res.setHeader('Set-Cookie', buildClearSessionCookie({ secure }));
+    res.json({ ok: true });
   });
 
   // Protected API routes
@@ -43,12 +215,14 @@ export function createAdminApp() {
       const to = req.query.to as string;
       const search = req.query.search as string;
       const statusFilter = req.query.status as string; // "2xx", "3xx", "4xx", "5xx", "errors"
+      const systemPromptHash = req.query.systemPromptHash as string;
 
       const where: any = {};
 
       if (method) where.method = method;
       if (isAiRequest !== undefined) where.isAiRequest = isAiRequest === 'true';
       if (targetUrl) where.targetUrl = { contains: targetUrl };
+      if (systemPromptHash) where.aiRequest = { systemPromptHash };
       if (from || to) {
         where.createdAt = {};
         if (from) where.createdAt.gte = new Date(from);
@@ -91,6 +265,7 @@ export function createAdminApp() {
                 isStreaming: true,
                 totalTokens: true,
                 totalCostMicros: true,
+                systemPromptHash: true,
               },
             },
           },
@@ -169,11 +344,13 @@ export function createAdminApp() {
       const model = req.query.model as string;
       const from = req.query.from as string;
       const to = req.query.to as string;
+      const systemPromptHash = req.query.systemPromptHash as string;
 
       const where: any = {};
 
       if (provider) where.provider = provider;
       if (model) where.model = { contains: model };
+      if (systemPromptHash) where.systemPromptHash = systemPromptHash;
       if (from || to) {
         where.createdAt = {};
         if (from) where.createdAt.gte = new Date(from);
@@ -190,6 +367,7 @@ export function createAdminApp() {
             id: true,
             provider: true,
             endpoint: true,
+            kind: true,
             model: true,
             isStreaming: true,
             promptTokens: true,
@@ -199,6 +377,9 @@ export function createAdminApp() {
             timeToFirstToken: true,
             totalDuration: true,
             createdAt: true,
+            systemPromptHash: true,
+            embeddingInputCount: true,
+            embeddingDimensions: true,
             // Tool-call metadata
             hasToolCalls: true,
             toolCallCount: true,
@@ -423,6 +604,10 @@ export function createAdminApp() {
       const targetUrl = originalRequest.requestLog.targetUrl;
       const path = originalRequest.requestLog.path;
 
+      // Rehydrate `media:<hash>.<ext>` refs back into data: URLs so the
+      // replayed request is wire-compatible with the original upstream call.
+      const hydratedBody = await rehydrateInlineMedia(requestBody);
+
       // Return the modified request data for the frontend to execute
       // (We don't proxy directly from admin to avoid auth issues)
       res.json({
@@ -436,7 +621,7 @@ export function createAdminApp() {
             // Preserve auth header if present (frontend should handle this)
             ...(originalHeaders.authorization ? { Authorization: originalHeaders.authorization } : {}),
           },
-          body: requestBody,
+          body: hydratedBody,
         },
         original: {
           id: originalRequest.id,
@@ -560,165 +745,99 @@ export function createAdminApp() {
   });
 
   // ==================== STATS ====================
+  // All stats endpoints accept ?from / ?to ISO timestamps and default to the
+  // last 30 days. Results are TTL-cached (30–60s) to keep dashboard polling
+  // off the DB during normal usage.
 
   app.get('/api/stats', async (req, res) => {
     try {
-      const from = req.query.from as string;
-      const to = req.query.to as string;
-
-      const dateFilter: any = {};
-      if (from || to) {
-        dateFilter.createdAt = {};
-        if (from) dateFilter.createdAt.gte = new Date(from);
-        if (to) dateFilter.createdAt.lte = new Date(to);
-      }
-
-      const [
-        totalRequests,
-        totalAiRequests,
-        aiStats,
-        recentErrors,
-        requestsByMethod,
-      ] = await Promise.all([
-        prisma.requestLog.count({ where: dateFilter }),
-        prisma.requestLog.count({ where: { ...dateFilter, isAiRequest: true } }),
-        prisma.aiRequest.aggregate({
-          where: dateFilter,
-          _sum: {
-            promptTokens: true,
-            completionTokens: true,
-            totalTokens: true,
-            totalCostMicros: true,
-          },
-          _avg: {
-            totalDuration: true,
-            timeToFirstToken: true,
-          },
-        }),
-        prisma.requestLog.count({
-          where: {
-            ...dateFilter,
-            statusCode: { gte: 400 },
-          },
-        }),
-        prisma.requestLog.groupBy({
-          by: ['method'],
-          where: dateFilter,
-          _count: true,
-        }),
-      ]);
-
-      // AI usage by provider
-      const usageByProvider = await prisma.aiRequest.groupBy({
-        by: ['provider'],
-        where: dateFilter,
-        _sum: {
-          totalTokens: true,
-          totalCostMicros: true,
-        },
-        _count: true,
-      });
-
-      // AI usage by model
-      const usageByModel = await prisma.aiRequest.groupBy({
-        by: ['model'],
-        where: dateFilter,
-        _sum: {
-          totalTokens: true,
-          totalCostMicros: true,
-        },
-        _count: true,
-        orderBy: {
-          _sum: {
-            totalCostMicros: 'desc',
-          },
-        },
-        take: 10,
-      });
-
-      // OpenRouter-specific stats - using raw query for new fields
-      const openrouterStats = await prisma.$queryRaw<Array<{
-        count: number;
-        totalCost: number | null;
-        cacheDiscount: number | null;
-        reasoningTokens: number | null;
-        cachedTokens: number | null;
-      }>>`
-        SELECT
-          COUNT(*) as count,
-          SUM(openrouterTotalCost) as totalCost,
-          SUM(openrouterCacheDiscount) as cacheDiscount,
-          SUM(openrouterNativeTokensReasoning) as reasoningTokens,
-          SUM(openrouterNativeTokensCached) as cachedTokens
-        FROM AiRequest
-        WHERE provider = 'openrouter' AND openrouterEnriched = 1
-      `;
-
-      // OpenRouter usage by actual provider
-      const openrouterByProvider = await prisma.$queryRaw<Array<{
-        provider: string;
-        count: number;
-        totalTokens: number | null;
-        totalCost: number | null;
-      }>>`
-        SELECT
-          openrouterProviderName as provider,
-          COUNT(*) as count,
-          SUM(totalTokens) as totalTokens,
-          SUM(openrouterTotalCost) as totalCost
-        FROM AiRequest
-        WHERE provider = 'openrouter' AND openrouterEnriched = 1 AND openrouterProviderName IS NOT NULL
-        GROUP BY openrouterProviderName
-        ORDER BY count DESC
-        LIMIT 10
-      `;
-
-      res.json({
-        totalRequests,
-        totalAiRequests,
-        totalErrors: recentErrors,
-        requestsByMethod: requestsByMethod.reduce(
-          (acc, m) => ({ ...acc, [m.method]: m._count }),
-          {}
-        ),
-        ai: {
-          totalPromptTokens: aiStats._sum.promptTokens || 0,
-          totalCompletionTokens: aiStats._sum.completionTokens || 0,
-          totalTokens: aiStats._sum.totalTokens || 0,
-          totalCostMicros: aiStats._sum.totalCostMicros || 0,
-          totalCostUsd: (aiStats._sum.totalCostMicros || 0) / 1_000_000,
-          avgDurationMs: Math.round(aiStats._avg.totalDuration || 0),
-          avgTimeToFirstTokenMs: Math.round(aiStats._avg.timeToFirstToken || 0),
-          byProvider: usageByProvider.map((p) => ({
-            provider: p.provider,
-            count: p._count,
-            totalTokens: p._sum.totalTokens || 0,
-            totalCostMicros: p._sum.totalCostMicros || 0,
-          })),
-          byModel: usageByModel.map((m) => ({
-            model: m.model || 'unknown',
-            count: m._count,
-            totalTokens: m._sum.totalTokens || 0,
-            totalCostMicros: m._sum.totalCostMicros || 0,
-          })),
-        },
-        openrouter: {
-          enrichedCount: Number(openrouterStats[0]?.count ?? 0),
-          totalCostUsd: openrouterStats[0]?.totalCost ?? 0,
-          totalCacheDiscountUsd: openrouterStats[0]?.cacheDiscount ?? 0,
-          totalReasoningTokens: Number(openrouterStats[0]?.reasoningTokens ?? 0),
-          totalCachedTokens: Number(openrouterStats[0]?.cachedTokens ?? 0),
-          byActualProvider: openrouterByProvider.map((p) => ({
-            provider: p.provider,
-            count: Number(p.count),
-            totalTokens: Number(p.totalTokens ?? 0),
-            totalCostUsd: p.totalCost ?? 0,
-          })),
-        },
-      });
+      const range = resolveRange(req.query.from as string, req.query.to as string);
+      const summary = await getSummary(range);
+      res.json(summary);
     } catch (error) {
-      console.error('Error fetching stats:', error);
+      console.error('Error fetching stats summary:', error);
       res.status(500).json({ error: 'Failed to fetch stats' });
+    }
+  });
+
+  app.get('/api/stats/timeseries', async (req, res) => {
+    try {
+      const range = resolveRange(req.query.from as string, req.query.to as string);
+      const rawBucket = (req.query.bucket as string) || 'day';
+      const bucket: Bucket = rawBucket === 'hour' ? 'hour' : 'day';
+      const points = await getTimeseries(range, bucket);
+      res.json({ bucket, points, range: { from: range.from.toISOString(), to: range.to.toISOString() } });
+    } catch (error) {
+      console.error('Error fetching timeseries:', error);
+      res.status(500).json({ error: 'Failed to fetch timeseries' });
+    }
+  });
+
+  app.get('/api/stats/top-prompts', async (req, res) => {
+    try {
+      const range = resolveRange(req.query.from as string, req.query.to as string);
+      const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
+      const prompts = await getTopPrompts(range, limit);
+      res.json({ prompts });
+    } catch (error) {
+      console.error('Error fetching top prompts:', error);
+      res.status(500).json({ error: 'Failed to fetch top prompts' });
+    }
+  });
+
+  app.get('/api/stats/latency', async (req, res) => {
+    try {
+      const range = resolveRange(req.query.from as string, req.query.to as string);
+      const heavyLimit = Math.min(parseInt(req.query.heavyLimit as string) || 10, 50);
+      const data = await getLatency(range, heavyLimit);
+      res.json(data);
+    } catch (error) {
+      console.error('Error fetching latency stats:', error);
+      res.status(500).json({ error: 'Failed to fetch latency stats' });
+    }
+  });
+
+  app.get('/api/stats/openrouter', async (req, res) => {
+    try {
+      const range = resolveRange(req.query.from as string, req.query.to as string);
+      const data = await getOpenRouterStats(range);
+      res.json(data);
+    } catch (error) {
+      console.error('Error fetching openrouter stats:', error);
+      res.status(500).json({ error: 'Failed to fetch openrouter stats' });
+    }
+  });
+
+  // ==================== MEDIA ====================
+
+  // Serve a stored media blob (image / audio / video / pdf etc).
+  // Path: /api/media/:hash.:ext (e.g. /api/media/abcd1234...png)
+  app.get('/api/media/:file', async (req, res) => {
+    try {
+      const file = req.params.file;
+      const dot = file.lastIndexOf('.');
+      if (dot < 0) {
+        res.status(400).json({ error: 'Invalid media path' });
+        return;
+      }
+      const hash = file.slice(0, dot);
+      const ext = file.slice(dot + 1);
+      if (!/^[a-f0-9]{64}$/.test(hash) || !/^[a-z0-9]{1,8}$/i.test(ext)) {
+        res.status(400).json({ error: 'Invalid media path' });
+        return;
+      }
+      const bytes = await readMediaFile(hash, ext);
+      if (!bytes) {
+        res.status(404).json({ error: 'Media not found' });
+        return;
+      }
+      res.setHeader('Content-Type', mimeFromExt(ext));
+      res.setHeader('Cache-Control', 'private, max-age=86400, immutable');
+      res.setHeader('Content-Length', bytes.length.toString());
+      res.send(bytes);
+    } catch (error) {
+      console.error('Error serving media:', error);
+      res.status(500).json({ error: 'Failed to serve media' });
     }
   });
 

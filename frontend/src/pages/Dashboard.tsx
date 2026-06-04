@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useSocket, RequestStartEvent, RequestCompleteEvent } from '../hooks/useSocket';
 import { RequestDetailPanel } from '../components/RequestDetailPanel';
+import { colorForHash, labelForHash } from '../utils/promptColor';
 
 interface AiRequestSummary {
   id: string;
@@ -11,6 +12,7 @@ interface AiRequestSummary {
   isStreaming: boolean;
   totalTokens: number | null;
   totalCostMicros: number | null;
+  systemPromptHash: string | null;
 }
 
 interface RequestLog {
@@ -181,6 +183,7 @@ function Dashboard() {
   const timeRange = searchParams.get('time') || '';
   const sortBy = searchParams.get('sort') || '';
   const sortDir = searchParams.get('dir') === 'asc' ? 'asc' : 'desc';
+  const promptHashFilter = searchParams.get('promptHash') || '';
 
   // Pinned requests (persisted in localStorage)
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(() => {
@@ -316,6 +319,7 @@ function Dashboard() {
           isStreaming: false,
           totalTokens: event.totalTokens ?? null,
           totalCostMicros: event.totalCostMicros ?? null,
+          systemPromptHash: null,
         } : log.aiRequest,
       };
     }));
@@ -340,6 +344,7 @@ function Dashboard() {
       if (methodFilter) params.set('method', methodFilter);
       if (statusFilter) params.set('status', statusFilter);
       if (searchQuery) params.set('search', searchQuery);
+      if (promptHashFilter) params.set('systemPromptHash', promptHashFilter);
 
       // Time range → from/to params for backend
       if (timeRange) {
@@ -406,7 +411,7 @@ function Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, [filter, methodFilter, statusFilter, searchQuery, timeRange, pinnedIds]);
+  }, [filter, methodFilter, statusFilter, searchQuery, timeRange, pinnedIds, promptHashFilter]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
@@ -744,8 +749,25 @@ function Dashboard() {
             >
               Errors
             </button>
+            {/* Active prompt-hash filter pill */}
+            {promptHashFilter && (() => {
+              const c = colorForHash(promptHashFilter);
+              const l = labelForHash(promptHashFilter);
+              if (!c || !l) return null;
+              return (
+                <button
+                  onClick={() => updateParam('promptHash', '')}
+                  title={`Clear prompt filter (${promptHashFilter})`}
+                  className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs border ${c.chipBg} ${c.chipText} ${c.border}`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
+                  <span className="font-mono">{l}</span>
+                  <span className="text-gray-500">×</span>
+                </button>
+              );
+            })()}
             {/* Clear */}
-            {(searchQuery || filter !== 'all' || methodFilter || statusFilter || timeRange) && (
+            {(searchQuery || filter !== 'all' || methodFilter || statusFilter || timeRange || promptHashFilter) && (
               <button
                 onClick={() => setSearchParams(new URLSearchParams())}
                 className="px-2 py-1.5 text-xs text-gray-500 hover:text-gray-200"
@@ -825,7 +847,12 @@ function Dashboard() {
                   }`}>
                     {log.responseTime ? `${log.responseTime}ms` : ''}
                   </span>
-                  <span className="text-right">
+                  <span className="text-right flex items-center justify-end gap-1.5">
+                    <PromptChip
+                      hash={log.aiRequest?.systemPromptHash ?? null}
+                      active={promptHashFilter === log.aiRequest?.systemPromptHash}
+                      onToggle={(h) => updateParam('promptHash', promptHashFilter === h ? '' : h)}
+                    />
                     {log.isAiRequest && log.aiRequest ? (
                       <span className="px-1.5 py-0.5 rounded bg-purple-900/40 text-purple-300 text-[11px] truncate">
                         {(log.aiRequest.model || 'AI').replace(/^.*\//, '').slice(0, 8)}
@@ -942,6 +969,37 @@ function Dashboard() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Color-coded chip identifying which system prompt a request belongs to.
+ * Click toggles the prompt-hash filter on the dashboard URL.
+ */
+function PromptChip({
+  hash,
+  active,
+  onToggle,
+}: {
+  hash: string | null;
+  active: boolean;
+  onToggle: (hash: string) => void;
+}) {
+  const color = colorForHash(hash);
+  const label = labelForHash(hash);
+  if (!color || !label || !hash) return null;
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onToggle(hash); }}
+      title={active ? 'Clear prompt filter' : `Show only this prompt (${hash})`}
+      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono leading-none border transition-colors hover:brightness-125 ${
+        color.chipBg
+      } ${color.chipText} ${active ? color.border : 'border-transparent'}`}
+    >
+      <span className={`w-1.5 h-1.5 rounded-full ${color.dot}`} />
+      <span>{label}</span>
+    </button>
   );
 }
 

@@ -1,4 +1,11 @@
 import { prisma } from './prisma.js';
+import {
+  ContentPart,
+  extractContentParts,
+  extractImagesField,
+  extractFileAnnotations,
+} from './multimodalProcessor.js';
+import { storeBase64 } from './mediaStorage.js';
 
 // OpenAI-compatible endpoints
 const AI_ENDPOINTS = [
@@ -46,11 +53,17 @@ export interface ConversationMessage {
   imageCount?: number;
   hasAudio?: boolean;
   audioCount?: number;
+  // Structured content parts (text + media + reasoning). When present, the UI
+  // renders these instead of (or alongside) the flat `content` string.
+  contentParts?: ContentPart[];
 }
+
+export type AiRequestKind = 'chat' | 'embedding' | 'audio' | 'image' | 'moderation';
 
 export interface ParsedAiRequest {
   provider: AiProvider;
   endpoint: string;
+  kind: AiRequestKind;
   model: string | null;
   isStreaming: boolean;
   systemPrompt: string | null;
@@ -62,6 +75,9 @@ export interface ParsedAiRequest {
   hasToolCalls: boolean;
   toolCallCount: number;
   toolNames: string[];
+  // Embedding-specific
+  embeddingInputCount?: number;
+  embeddingInputPreview?: string[];
 }
 
 export interface ParsedAiResponse {
@@ -74,6 +90,12 @@ export interface ParsedAiResponse {
   // Tool calls from the response
   toolCalls?: ToolCall[];
   finishReason?: string;
+  // Structured multimodal output (images, audio, reasoning, file annotations).
+  // Populated alongside the legacy text `assistantResponse` for backwards compat.
+  assistantContentParts?: ContentPart[];
+  // Embedding-specific: filled in by parseEmbeddingResponse
+  embeddingCount?: number;
+  embeddingDimensions?: number;
 }
 
 export interface CostEstimate {
@@ -84,6 +106,28 @@ export interface CostEstimate {
 
 export function isAiEndpoint(path: string): boolean {
   return AI_ENDPOINT_PATTERNS.some(pattern => pattern.test(path));
+}
+
+/**
+ * Classify the AI endpoint so the UI / stats can group requests sensibly.
+ * Falls back to 'chat' since chat/completions is the dominant case.
+ */
+export function detectKind(path: string): AiRequestKind {
+  const lower = path.toLowerCase();
+  if (lower.includes('/embeddings')) return 'embedding';
+  if (lower.includes('/audio/')) return 'audio';
+  if (lower.includes('/images/')) return 'image';
+  if (lower.includes('/moderations')) return 'moderation';
+  return 'chat';
+}
+
+/**
+ * Truncate a string to a max length with an ellipsis. Embedding input
+ * previews use this so we don't store full document text per row.
+ */
+function truncatePreview(s: string, max: number = 200): string {
+  if (s.length <= max) return s;
+  return s.slice(0, max) + '…';
 }
 
 export function detectProvider(targetUrl: string, headers: Record<string, any>): AiProvider {
@@ -140,6 +184,7 @@ export function extractOpenRouterGenerationIdFromChunks(chunks: any[]): string |
 
 export function parseAiRequest(body: any, path: string, targetUrl: string, headers: Record<string, any>): ParsedAiRequest {
   const provider = detectProvider(targetUrl, headers);
+  const kind = detectKind(path);
   const isStreaming = body?.stream === true;
 
   let systemPrompt: string | null = null;
@@ -148,6 +193,25 @@ export function parseAiRequest(body: any, path: string, targetUrl: string, heade
   const toolNames: Set<string> = new Set();
   let toolCallCount = 0;
   let model: string | null = body?.model || null;
+
+  // Embedding requests have `input` (string | string[]) instead of `messages`.
+  // We don't store the full corpus — capture the count plus a short preview of
+  // each entry so the UI can render "3 inputs: 'foo…', 'bar…', …".
+  let embeddingInputCount: number | undefined;
+  let embeddingInputPreview: string[] | undefined;
+  if (kind === 'embedding') {
+    const input = body?.input;
+    if (typeof input === 'string') {
+      embeddingInputCount = 1;
+      embeddingInputPreview = [truncatePreview(input)];
+    } else if (Array.isArray(input)) {
+      embeddingInputCount = input.length;
+      // Cap the preview list — large batch jobs can have thousands of entries.
+      embeddingInputPreview = input.slice(0, 5).map((v: unknown) =>
+        truncatePreview(typeof v === 'string' ? v : JSON.stringify(v))
+      );
+    }
+  }
 
   // Parse messages for chat completions
   if (Array.isArray(body?.messages)) {
@@ -163,6 +227,7 @@ export function parseAiRequest(body: any, path: string, targetUrl: string, heade
       } else if (role === 'user') {
         const content = extractContent(msg.content);
         const mediaInfo = extractMediaInfo(msg.content);
+        const parts = extractContentParts(msg.content);
         if (content) userMessages.push(content);
         messages.push({
           role: 'user',
@@ -171,10 +236,12 @@ export function parseAiRequest(body: any, path: string, targetUrl: string, heade
           imageCount: mediaInfo.imageCount,
           hasAudio: mediaInfo.hasAudio,
           audioCount: mediaInfo.audioCount,
+          contentParts: parts.length > 0 ? parts : undefined,
         });
       } else if (role === 'assistant') {
         const content = extractContent(msg.content);
         const parsedToolCalls = parseToolCalls(msg.tool_calls || msg.function_call);
+        const parts = extractContentParts(msg.content);
 
         // Collect tool names
         if (parsedToolCalls) {
@@ -188,6 +255,7 @@ export function parseAiRequest(body: any, path: string, targetUrl: string, heade
           role: 'assistant',
           content,
           toolCalls: parsedToolCalls || undefined,
+          contentParts: parts.length > 0 ? parts : undefined,
         });
       } else if (role === 'tool') {
         // Tool result message
@@ -238,6 +306,7 @@ export function parseAiRequest(body: any, path: string, targetUrl: string, heade
   return {
     provider,
     endpoint: path,
+    kind,
     model,
     isStreaming,
     systemPrompt,
@@ -247,7 +316,33 @@ export function parseAiRequest(body: any, path: string, targetUrl: string, heade
     hasToolCalls: toolCallCount > 0,
     toolCallCount,
     toolNames: Array.from(toolNames),
+    embeddingInputCount,
+    embeddingInputPreview,
   };
+}
+
+/**
+ * Replace the (potentially MB-sized) embedding vectors in an embedding
+ * response with `null` placeholders before the body lands in the DB. Records
+ * the dimensionality of the first vector so the UI can still display it.
+ *
+ * Mutates `body` in place. Returns the detected vector dimension, or null
+ * if no embeddings were found.
+ */
+export function stripEmbeddingVectors(body: any): { count: number; dimensions: number | null } | null {
+  if (!body || !Array.isArray(body.data)) return null;
+  let dimensions: number | null = null;
+  let count = 0;
+  for (const entry of body.data) {
+    if (!entry || typeof entry !== 'object') continue;
+    const e = entry as { embedding?: unknown };
+    if (Array.isArray(e.embedding)) {
+      if (dimensions === null) dimensions = e.embedding.length;
+      e.embedding = null;
+      count++;
+    }
+  }
+  return count > 0 ? { count, dimensions } : null;
 }
 
 /**
@@ -312,6 +407,25 @@ function extractMediaInfo(content: any): {
   };
 }
 
+/**
+ * Build a flat preview text for a structured content parts array.
+ * Used when we want to summarize a multimodal message as text (e.g. legacy
+ * `content` field, fallbacks).
+ */
+export function contentPartsToText(parts: ContentPart[]): string {
+  const out: string[] = [];
+  for (const p of parts) {
+    if (p.type === 'text') out.push(p.text);
+    else if (p.type === 'reasoning') out.push(`[reasoning]\n${p.text}`);
+    else if (p.type === 'image') out.push('[image]');
+    else if (p.type === 'audio') out.push(p.transcript ? `[audio: ${p.transcript}]` : '[audio]');
+    else if (p.type === 'video') out.push('[video]');
+    else if (p.type === 'file') out.push(p.filename ? `[file: ${p.filename}]` : '[file]');
+    else if (p.type === 'file_annotation') out.push(`[parsed file: ${p.name ?? p.hash.slice(0, 8)}]`);
+  }
+  return out.join('\n').trim();
+}
+
 function extractContent(content: any): string | null {
   if (typeof content === 'string') return content;
 
@@ -335,6 +449,7 @@ export function parseAiResponse(body: any, isStreaming: boolean): ParsedAiRespon
   let model: string | null = null;
   let toolCalls: ToolCall[] | undefined = undefined;
   let finishReason: string | undefined = undefined;
+  const assistantContentParts: ContentPart[] = [];
 
   if (!body) {
     return { assistantResponse, promptTokens, completionTokens, totalTokens, model, fullResponse: body };
@@ -343,17 +458,53 @@ export function parseAiResponse(body: any, isStreaming: boolean): ParsedAiRespon
   // Standard OpenAI response format
   if (body.choices && Array.isArray(body.choices)) {
     const choice = body.choices[0];
-    if (choice?.message?.content) {
-      assistantResponse = choice.message.content;
+    const msg = choice?.message;
+    if (msg?.content) {
+      assistantResponse = typeof msg.content === 'string' ? msg.content : null;
+      // Some providers return content as a content-part array (Anthropic-style on chat completions)
+      if (Array.isArray(msg.content)) {
+        assistantContentParts.push(...extractContentParts(msg.content));
+      } else if (typeof msg.content === 'string' && msg.content) {
+        assistantContentParts.push({ type: 'text', text: msg.content });
+      }
     } else if (choice?.text) {
       assistantResponse = choice.text;
+      if (choice.text) assistantContentParts.push({ type: 'text', text: choice.text });
+    }
+
+    // Reasoning content (OpenRouter / o1-style)
+    if (msg && typeof msg.reasoning === 'string' && msg.reasoning) {
+      assistantContentParts.unshift({ type: 'reasoning', text: msg.reasoning });
+    } else if (msg && Array.isArray(msg.reasoning_details)) {
+      const reasoningText = msg.reasoning_details
+        .map((r: any) => (typeof r?.text === 'string' ? r.text : ''))
+        .filter(Boolean)
+        .join('\n');
+      if (reasoningText) assistantContentParts.unshift({ type: 'reasoning', text: reasoningText });
+    }
+
+    // Image output (OpenRouter / Gemini / etc.): message.images[]
+    if (msg?.images) {
+      assistantContentParts.push(...extractImagesField(msg.images));
+    }
+
+    // Audio output (non-streaming, when present): message.audio
+    if (msg?.audio && typeof msg.audio === 'object') {
+      const a = msg.audio as any;
+      const part = audioPartFromMessageAudio(a);
+      if (part) assistantContentParts.push(part);
+    }
+
+    // File annotations (OpenRouter PDF parse results)
+    if (msg?.annotations) {
+      assistantContentParts.push(...extractFileAnnotations(msg.annotations));
     }
 
     // Extract tool calls from response
-    if (choice?.message?.tool_calls) {
-      toolCalls = parseToolCalls(choice.message.tool_calls) || undefined;
-    } else if (choice?.message?.function_call) {
-      toolCalls = parseToolCalls(choice.message.function_call) || undefined;
+    if (msg?.tool_calls) {
+      toolCalls = parseToolCalls(msg.tool_calls) || undefined;
+    } else if (msg?.function_call) {
+      toolCalls = parseToolCalls(msg.function_call) || undefined;
     }
 
     // Extract finish reason
@@ -370,6 +521,17 @@ export function parseAiResponse(body: any, isStreaming: boolean): ParsedAiRespon
       .join('\n');
     if (textContent) assistantResponse = textContent;
 
+    // Anthropic thinking blocks
+    const thinking = body.content
+      .filter((c: any) => c.type === 'thinking')
+      .map((c: any) => (typeof c.thinking === 'string' ? c.thinking : (c.text || '')))
+      .filter(Boolean)
+      .join('\n');
+    if (thinking) assistantContentParts.unshift({ type: 'reasoning', text: thinking });
+
+    // Build structured parts from Anthropic content blocks
+    assistantContentParts.push(...extractContentParts(body.content));
+
     // Anthropic tool_use blocks
     const toolUseBlocks = body.content.filter((c: any) => c.type === 'tool_use');
     if (toolUseBlocks.length > 0) {
@@ -382,6 +544,11 @@ export function parseAiResponse(body: any, isStreaming: boolean): ParsedAiRespon
         },
       }));
     }
+  }
+
+  // OpenRouter error path: parsed PDF annotations under error.metadata.file_annotations
+  if (body.error && body.error.metadata && Array.isArray(body.error.metadata.file_annotations)) {
+    assistantContentParts.push(...extractFileAnnotations(body.error.metadata.file_annotations));
   }
 
   // Anthropic stop_reason
@@ -398,6 +565,18 @@ export function parseAiResponse(body: any, isStreaming: boolean): ParsedAiRespon
 
   model = body.model || null;
 
+  // Embedding responses: count + dimensions are extracted by the caller via
+  // stripEmbeddingVectors() since stripping must happen before we serialize.
+  let embeddingCount: number | undefined;
+  let embeddingDimensions: number | undefined;
+  if (Array.isArray(body.data) && body.data.some((d: any) => 'embedding' in (d ?? {}))) {
+    embeddingCount = body.data.length;
+    const first = body.data.find((d: any) => Array.isArray(d?.embedding) || d?.embedding === null);
+    if (first && Array.isArray(first.embedding)) {
+      embeddingDimensions = first.embedding.length;
+    }
+  }
+
   return {
     assistantResponse,
     promptTokens,
@@ -407,11 +586,38 @@ export function parseAiResponse(body: any, isStreaming: boolean): ParsedAiRespon
     fullResponse: body,
     toolCalls,
     finishReason,
+    assistantContentParts: assistantContentParts.length > 0 ? assistantContentParts : undefined,
+    embeddingCount,
+    embeddingDimensions,
   };
 }
 
-export function parseStreamedResponse(chunks: string[]): ParsedAiResponse {
+function audioPartFromMessageAudio(a: any): ContentPart | null {
+  if (!a || typeof a !== 'object') return null;
+  const transcript = typeof a.transcript === 'string' ? a.transcript : undefined;
+  const format = typeof a.format === 'string' ? a.format : undefined;
+  // data may have already been stripped to media:<hash>.<ext>
+  if (typeof a.data === 'string' && a.data.startsWith('media:')) {
+    const rest = a.data.slice(6);
+    const dot = rest.lastIndexOf('.');
+    if (dot < 0) return null;
+    return {
+      type: 'audio',
+      media: { hash: rest.slice(0, dot), ext: rest.slice(dot + 1) },
+      format,
+      transcript,
+    };
+  }
+  // Otherwise we only have a transcript — still useful to surface
+  if (transcript) {
+    return { type: 'audio', media: {}, format, transcript };
+  }
+  return null;
+}
+
+export async function parseStreamedResponse(chunks: string[]): Promise<ParsedAiResponse> {
   let assistantResponse = '';
+  let reasoningText = '';
   let promptTokens: number | null = null;
   let completionTokens: number | null = null;
   let totalTokens: number | null = null;
@@ -422,38 +628,71 @@ export function parseStreamedResponse(chunks: string[]): ParsedAiResponse {
   // Collect tool calls from streaming (OpenAI streams tool calls incrementally)
   const toolCallsMap = new Map<number, { id: string; type: 'function'; function: { name: string; arguments: string } }>();
 
+  // Streaming image output: each delta.images entry is the full image; collect by index.
+  const streamedImages: ContentPart[] = [];
+  // Streaming audio output: data chunks accumulated, transcript accumulated.
+  const audioDataChunks: string[] = [];
+  let audioTranscript = '';
+  let audioFormat: string | undefined = undefined;
+  // File annotations from final chunk
+  let annotations: any = null;
+
   for (const chunk of chunks) {
-    // Skip empty lines and [DONE]
     if (!chunk || chunk === '[DONE]') continue;
 
     try {
       const data = JSON.parse(chunk);
       fullResponse.push(data);
 
-      // Extract content from delta
-      if (data.choices?.[0]?.delta?.content) {
-        assistantResponse += data.choices[0].delta.content;
-      }
+      const delta = data.choices?.[0]?.delta;
+      if (delta) {
+        if (typeof delta.content === 'string') assistantResponse += delta.content;
 
-      // Extract tool calls from delta (OpenAI streams tool calls incrementally)
-      if (data.choices?.[0]?.delta?.tool_calls) {
-        for (const tc of data.choices[0].delta.tool_calls) {
-          const index = tc.index ?? 0;
-          if (!toolCallsMap.has(index)) {
-            toolCallsMap.set(index, {
-              id: tc.id || '',
-              type: 'function',
-              function: { name: '', arguments: '' },
-            });
+        // Reasoning streaming
+        if (typeof delta.reasoning === 'string') reasoningText += delta.reasoning;
+        if (Array.isArray(delta.reasoning_details)) {
+          for (const rd of delta.reasoning_details) {
+            if (typeof rd?.text === 'string') reasoningText += rd.text;
           }
-          const existing = toolCallsMap.get(index)!;
-          if (tc.id) existing.id = tc.id;
-          if (tc.function?.name) existing.function.name += tc.function.name;
-          if (tc.function?.arguments) existing.function.arguments += tc.function.arguments;
+        }
+
+        // Image output streaming
+        if (Array.isArray(delta.images)) {
+          streamedImages.push(...extractImagesField(delta.images));
+        }
+
+        // Audio output streaming
+        if (delta.audio && typeof delta.audio === 'object') {
+          if (typeof delta.audio.data === 'string') audioDataChunks.push(delta.audio.data);
+          if (typeof delta.audio.transcript === 'string') audioTranscript += delta.audio.transcript;
+          if (typeof delta.audio.format === 'string') audioFormat = delta.audio.format;
+        }
+
+        // Tool calls (OpenAI incremental)
+        if (Array.isArray(delta.tool_calls)) {
+          for (const tc of delta.tool_calls) {
+            const index = tc.index ?? 0;
+            if (!toolCallsMap.has(index)) {
+              toolCallsMap.set(index, {
+                id: tc.id || '',
+                type: 'function',
+                function: { name: '', arguments: '' },
+              });
+            }
+            const existing = toolCallsMap.get(index)!;
+            if (tc.id) existing.id = tc.id;
+            if (tc.function?.name) existing.function.name += tc.function.name;
+            if (tc.function?.arguments) existing.function.arguments += tc.function.arguments;
+          }
         }
       }
 
-      // Extract finish reason
+      // Final-chunk annotations (PDF parse) appear on message in non-delta form for OpenRouter
+      const finalMsg = data.choices?.[0]?.message;
+      if (finalMsg?.annotations && !annotations) {
+        annotations = finalMsg.annotations;
+      }
+
       if (data.choices?.[0]?.finish_reason) {
         finishReason = data.choices[0].finish_reason;
       }
@@ -462,25 +701,23 @@ export function parseStreamedResponse(chunks: string[]): ParsedAiResponse {
       if (data.delta?.text) {
         assistantResponse += data.delta.text;
       }
-
-      // Anthropic stop_reason
+      if (data.delta?.thinking) {
+        reasoningText += typeof data.delta.thinking === 'string' ? data.delta.thinking : '';
+      }
       if (data.delta?.stop_reason) {
         finishReason = data.delta.stop_reason;
       }
 
-      // Model (usually in first chunk)
       if (data.model && !model) {
         model = data.model;
       }
 
-      // Usage (usually in last chunk for OpenAI with stream_options)
       if (data.usage) {
         promptTokens = data.usage.prompt_tokens ?? data.usage.input_tokens ?? null;
         completionTokens = data.usage.completion_tokens ?? data.usage.output_tokens ?? null;
         totalTokens = data.usage.total_tokens ?? null;
       }
 
-      // Anthropic message_delta with usage
       if (data.type === 'message_delta' && data.usage) {
         completionTokens = data.usage.output_tokens ?? null;
       }
@@ -492,10 +729,37 @@ export function parseStreamedResponse(chunks: string[]): ParsedAiResponse {
     }
   }
 
-  // Convert tool calls map to array
   const toolCalls = toolCallsMap.size > 0
     ? Array.from(toolCallsMap.values()).filter(tc => tc.function.name)
     : undefined;
+
+  // Assemble structured assistant parts
+  const assistantContentParts: ContentPart[] = [];
+  if (reasoningText) assistantContentParts.push({ type: 'reasoning', text: reasoningText });
+  if (assistantResponse) assistantContentParts.push({ type: 'text', text: assistantResponse });
+  assistantContentParts.push(...streamedImages);
+
+  // Persist accumulated audio chunks (if any)
+  if (audioDataChunks.length > 0) {
+    const fullAudioBase64 = audioDataChunks.join('');
+    const format = audioFormat || 'wav';
+    const mime = `audio/${format === 'mp3' ? 'mpeg' : format}`;
+    const ref = await storeBase64(fullAudioBase64, mime);
+    if (ref) {
+      assistantContentParts.push({
+        type: 'audio',
+        media: ref,
+        format,
+        transcript: audioTranscript || undefined,
+      });
+    } else if (audioTranscript) {
+      assistantContentParts.push({ type: 'audio', media: {}, format, transcript: audioTranscript });
+    }
+  } else if (audioTranscript) {
+    assistantContentParts.push({ type: 'audio', media: {}, format: audioFormat, transcript: audioTranscript });
+  }
+
+  if (annotations) assistantContentParts.push(...extractFileAnnotations(annotations));
 
   return {
     assistantResponse: assistantResponse || null,
@@ -506,6 +770,7 @@ export function parseStreamedResponse(chunks: string[]): ParsedAiResponse {
     fullResponse,
     toolCalls,
     finishReason,
+    assistantContentParts: assistantContentParts.length > 0 ? assistantContentParts : undefined,
   };
 }
 

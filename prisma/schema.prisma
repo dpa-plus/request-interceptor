@@ -59,9 +59,20 @@ model AiRequest {
   endpoint        String   // z.B. "/v1/chat/completions"
   model           String?
   isStreaming     Boolean  @default(false)
+  // High-level kind of AI call (drives how the UI renders the body).
+  // Currently: "chat" (default, also for completions) | "embedding" | "audio" | "image" | "moderation"
+  kind            String   @default("chat")
+  // For embedding requests: stored summary so the UI can show "3 inputs, 1536-dim"
+  // without ever loading the (potentially MB-sized) vector arrays.
+  embeddingInputCount Int?
+  embeddingDimensions Int?
 
   // Messages (vereinfacht für Übersicht - Legacy)
   systemPrompt    String?
+  // 12-char SHA256 prefix of the (verbatim) system prompt. Used by the UI to
+  // visually cluster requests that share the same prompt; null when there is
+  // no system prompt.
+  systemPromptHash String?
   userMessages    String?  // JSON Array
   assistantResponse String?
 
@@ -119,6 +130,8 @@ model AiRequest {
   @@index([model])
   @@index([createdAt])
   @@index([openrouterGenerationId])
+  @@index([systemPromptHash])
+  @@index([kind])
 }
 
 model RoutingRule {

@@ -46,7 +46,7 @@ async function decompressBuffer(buffer: Buffer, contentEncoding: string | undefi
 }
 import { prisma } from './lib/prisma.js';
 import { resolveTarget, extractTargetFromQuery, buildTargetUrl } from './lib/routing.js';
-import { processBody, safeJsonStringify, safeJsonParse } from './lib/bodyHandler.js';
+import { processBody, safeJsonStringify } from './lib/bodyHandler.js';
 import {
   isAiEndpoint,
   parseAiRequest,
@@ -56,52 +56,40 @@ import {
   isOpenRouter,
   extractOpenRouterGenerationId,
   extractOpenRouterGenerationIdFromChunks,
+  stripEmbeddingVectors,
   ConversationMessage,
   ParsedAiResponse,
 } from './lib/aiDetector.js';
+import { stripInlineMedia } from './lib/multimodalProcessor.js';
+import { redactHeadersForStorage } from './lib/headerRedaction.js';
+import { buildAiRequestData } from './lib/aiRequestData.js';
+import { SSECollector, isStreamingResponse } from './lib/streamHandler.js';
+import { scheduleOpenRouterEnrichment } from './lib/openRouterEnricher.js';
+import { emitRequestStart, emitRequestComplete } from './lib/socketServer.js';
 
 /**
- * Add the assistant response (including tool calls) to the messages array.
- * This creates a complete conversation including the AI's response.
+ * Append the assistant response (text + tool calls + multimodal parts) to the
+ * conversation. Returns a new array — does not mutate the input.
  */
 function buildMessagesWithResponse(
   requestMessages: ConversationMessage[],
   parsedResponse: ParsedAiResponse
 ): ConversationMessage[] {
-  const messages = [...requestMessages];
-
-  // Only add response if there's content or tool calls
-  if (parsedResponse.assistantResponse || (parsedResponse.toolCalls && parsedResponse.toolCalls.length > 0)) {
-    messages.push({
+  const parts = parsedResponse.assistantContentParts;
+  const hasParts = !!(parts && parts.length > 0);
+  const hasText = !!parsedResponse.assistantResponse;
+  const hasTools = !!(parsedResponse.toolCalls && parsedResponse.toolCalls.length > 0);
+  if (!hasParts && !hasText && !hasTools) return requestMessages;
+  return [
+    ...requestMessages,
+    {
       role: 'assistant',
       content: parsedResponse.assistantResponse,
       toolCalls: parsedResponse.toolCalls,
-    });
-  }
-
-  return messages;
+      contentParts: hasParts ? parts : undefined,
+    },
+  ];
 }
-
-/**
- * Combine tool names from request and response into a single JSON string.
- */
-function combineToolNames(
-  requestToolNames: string[],
-  responseToolCalls?: { function: { name: string } }[]
-): string | null {
-  const allNames = new Set(requestToolNames);
-  if (responseToolCalls) {
-    for (const tc of responseToolCalls) {
-      if (tc.function?.name) {
-        allNames.add(tc.function.name);
-      }
-    }
-  }
-  return allNames.size > 0 ? safeJsonStringify(Array.from(allNames)) : null;
-}
-import { SSECollector, isStreamingResponse } from './lib/streamHandler.js';
-import { scheduleOpenRouterEnrichment } from './lib/openRouterEnricher.js';
-import { emitRequestStart, emitRequestComplete } from './lib/socketServer.js';
 
 // Known bot/crawler User-Agent patterns to block
 const BLOCKED_BOT_PATTERNS: RegExp[] = [
@@ -200,7 +188,7 @@ export function createProxyApp() {
               url: req.originalUrl,
               path: req.path,
               queryParams: safeJsonStringify(req.query),
-              headers: safeJsonStringify(req.headers),
+              headers: safeJsonStringify(redactHeadersForStorage(req.headers as Record<string, unknown>)),
               body,
               bodyTruncated: truncated,
               bodySize: size,
@@ -235,14 +223,24 @@ export function createProxyApp() {
       if (isAi && req.body) {
         try {
           requestBodyParsed = JSON.parse(req.body.toString());
+          // Extract inline media (base64 images / audio / PDFs / video) out of the
+          // parsed body and replace with `media:<hash>.<ext>` refs. The original
+          // request bytes (req.body) are unchanged and forwarded as-is upstream.
+          await stripInlineMedia(requestBodyParsed);
           parsedAiReq = parseAiRequest(requestBodyParsed, req.path, targetUrl, req.headers as Record<string, any>);
         } catch {
           // Not valid JSON, treat as regular request
         }
       }
 
-      // Prepare request body info for logging
-      const { body: logBody, truncated: bodyTruncated, size: bodySize } = processBody(req.body, maxBodySize);
+      // Prepare request body info for logging. For AI requests where we've
+      // already extracted inline media (base64 → media: refs), log the
+      // stripped JSON instead of the raw request bytes — otherwise the
+      // `body` column would still carry every base64 image.
+      const bodyForLog = (isAi && requestBodyParsed)
+        ? Buffer.from(safeJsonStringify(requestBodyParsed))
+        : req.body;
+      const { body: logBody, truncated: bodyTruncated, size: bodySize } = processBody(bodyForLog, maxBodySize);
 
       // Create initial log entry (skip static assets like .js, .css, images, etc.)
       let logId: string | null = null;
@@ -254,7 +252,7 @@ export function createProxyApp() {
             url: req.originalUrl,
             path: req.path,
             queryParams: safeJsonStringify(cleanQuery),
-            headers: safeJsonStringify(req.headers),
+            headers: safeJsonStringify(redactHeadersForStorage(req.headers as Record<string, unknown>)),
             body: logBody,
             bodyTruncated,
             bodySize,
@@ -424,8 +422,10 @@ async function handleStreamingResponse(
   const { chunks, timeToFirstToken } = collector.getResult();
   const responseTime = Date.now() - startTime;
 
-  // Parse streamed response
-  const parsedResponse = parseStreamedResponse(chunks);
+  // Parse streamed response (async: extracts audio chunks → media storage)
+  const parsedResponse = await parseStreamedResponse(chunks);
+  // Strip inline media from the collected chunks (images embedded in delta.images, etc.)
+  await stripInlineMedia(parsedResponse.fullResponse);
 
   // Calculate cost
   const cost = await calculateCost(
@@ -443,47 +443,31 @@ async function handleStreamingResponse(
         ? extractOpenRouterGenerationIdFromChunks(parsedResponse.fullResponse)
         : null;
 
-      // Create AI request record
       const aiRequest = await prisma.aiRequest.create({
-        data: {
-          provider: parsedAiReq.provider,
-          endpoint: parsedAiReq.endpoint,
-          model: parsedResponse.model || parsedAiReq.model,
+        data: buildAiRequestData({
+          parsedAiReq,
+          parsedResponse,
+          cost,
           isStreaming: true,
-          systemPrompt: parsedAiReq.systemPrompt,
-          userMessages: safeJsonStringify(parsedAiReq.userMessages),
-          assistantResponse: parsedResponse.assistantResponse,
-          fullRequest: safeJsonStringify(parsedAiReq.fullRequest),
-          fullResponse: safeJsonStringify(parsedResponse.fullResponse),
-          // Full conversation with all message types (including AI response)
-          messages: safeJsonStringify(buildMessagesWithResponse(parsedAiReq.messages, parsedResponse)),
-          hasToolCalls: parsedAiReq.hasToolCalls || (parsedResponse.toolCalls && parsedResponse.toolCalls.length > 0),
-          toolCallCount: (parsedAiReq.toolCallCount || 0) + (parsedResponse.toolCalls?.length || 0) > 0
-            ? (parsedAiReq.toolCallCount || 0) + (parsedResponse.toolCalls?.length || 0)
-            : null,
-          toolNames: combineToolNames(parsedAiReq.toolNames, parsedResponse.toolCalls),
-          promptTokens: parsedResponse.promptTokens,
-          completionTokens: parsedResponse.completionTokens,
-          totalTokens: parsedResponse.totalTokens,
-          inputCostMicros: cost.inputCostMicros,
-          outputCostMicros: cost.outputCostMicros,
-          totalCostMicros: cost.totalCostMicros,
           timeToFirstToken,
           totalDuration: responseTime,
-          // OpenRouter-specific (field added in migration)
-          ...(openrouterGenerationId && { openrouterGenerationId }),
-        } as any,
+          openrouterGenerationId,
+          messages: buildMessagesWithResponse(parsedAiReq.messages, parsedResponse),
+        }),
       });
 
-      const responseStr = chunks.join('');
-      const responseSize = responseStr.length;
+      // Store the stripped final response (chunks array w/ media: refs) as the
+      // request-log body — keeps streaming and non-streaming responses
+      // structurally consistent in the DB and the UI.
+      const responseBodyJson = safeJsonStringify(parsedResponse.fullResponse);
+      const responseSize = Buffer.byteLength(responseBodyJson);
 
       await prisma.requestLog.update({
         where: { id: logId },
         data: {
           statusCode: proxyRes.statusCode,
-          responseHeaders: safeJsonStringify(proxyRes.headers),
-          responseBody: '[Streaming response - see AI request details]',
+          responseHeaders: safeJsonStringify(redactHeadersForStorage(proxyRes.headers as Record<string, unknown>)),
+          responseBody: responseBodyJson,
           responseSize,
           responseTime,
           aiRequestId: aiRequest.id,
@@ -515,7 +499,7 @@ async function handleStreamingResponse(
           where: { id: logId },
           data: {
             statusCode: proxyRes.statusCode,
-            responseHeaders: safeJsonStringify(proxyRes.headers),
+            responseHeaders: safeJsonStringify(redactHeadersForStorage(proxyRes.headers as Record<string, unknown>)),
             responseBody: '[Streaming response - logging failed]',
             responseSize: chunks.join('').length,
             responseTime,
@@ -576,17 +560,12 @@ async function handleRegularResponse(
   const contentEncoding = proxyRes.headers['content-encoding'] as string | undefined;
   const decompressedBuffer = await decompressBuffer(responseBuffer, contentEncoding);
 
-  // Process response for logging
-  const { body: responseBody, truncated: responseTruncated, size: responseSize } = processBody(
-    decompressedBuffer,
-    maxBodySize
-  );
-
-  // Parse AI response if applicable
+  // Parse AI response if applicable. For AI responses we strip inline media
+  // up front so it never reaches the DB (neither aiRequest.fullResponse nor
+  // requestLog.responseBody).
   let aiRequestId: string | null = null;
-
+  let parsedBody: any = null;
   if (isAi && parsedAiReq && logEnabled) {
-    let parsedBody: any = null;
     try {
       parsedBody = JSON.parse(decompressedBuffer.toString());
     } catch {
@@ -595,7 +574,15 @@ async function handleRegularResponse(
 
     if (parsedBody) {
       try {
+        // Extract inline media (output images, audio data, parsed PDF annotations)
+        // and embedding vectors before storing the response in the DB. Both can
+        // bloat rows by orders of magnitude (audio: MB, embeddings: ~6KB per
+        // vector × N inputs → easily 10MB+ per row otherwise). We strip
+        // embeddings AFTER parseAiResponse so the parser can read the original
+        // vector dimensions before they're nulled out.
+        await stripInlineMedia(parsedBody);
         const parsedResponse = parseAiResponse(parsedBody, false);
+        stripEmbeddingVectors(parsedBody);
         const cost = await calculateCost(
           parsedResponse.model || parsedAiReq.model,
           parsedResponse.promptTokens,
@@ -609,33 +596,16 @@ async function handleRegularResponse(
           : null;
 
         const aiRequest = await prisma.aiRequest.create({
-          data: {
-            provider: parsedAiReq.provider,
-            endpoint: parsedAiReq.endpoint,
-            model: parsedResponse.model || parsedAiReq.model,
+          data: buildAiRequestData({
+            parsedAiReq,
+            parsedResponse,
+            cost,
             isStreaming: false,
-            systemPrompt: parsedAiReq.systemPrompt,
-            userMessages: safeJsonStringify(parsedAiReq.userMessages),
-            assistantResponse: parsedResponse.assistantResponse,
-            fullRequest: safeJsonStringify(parsedAiReq.fullRequest),
-            fullResponse: safeJsonStringify(parsedResponse.fullResponse),
-            // Full conversation with all message types (including AI response)
-            messages: safeJsonStringify(buildMessagesWithResponse(parsedAiReq.messages, parsedResponse)),
-            hasToolCalls: parsedAiReq.hasToolCalls || (parsedResponse.toolCalls && parsedResponse.toolCalls.length > 0),
-            toolCallCount: (parsedAiReq.toolCallCount || 0) + (parsedResponse.toolCalls?.length || 0) > 0
-              ? (parsedAiReq.toolCallCount || 0) + (parsedResponse.toolCalls?.length || 0)
-              : null,
-            toolNames: combineToolNames(parsedAiReq.toolNames, parsedResponse.toolCalls),
-            promptTokens: parsedResponse.promptTokens,
-            completionTokens: parsedResponse.completionTokens,
-            totalTokens: parsedResponse.totalTokens,
-            inputCostMicros: cost.inputCostMicros,
-            outputCostMicros: cost.outputCostMicros,
-            totalCostMicros: cost.totalCostMicros,
+            timeToFirstToken: null,
             totalDuration: responseTime,
-            // OpenRouter-specific (field added in migration)
-            ...(openrouterGenerationId && { openrouterGenerationId }),
-          } as any,
+            openrouterGenerationId,
+            messages: buildMessagesWithResponse(parsedAiReq.messages, parsedResponse),
+          }),
         });
 
         aiRequestId = aiRequest.id;
@@ -651,13 +621,23 @@ async function handleRegularResponse(
     }
   }
 
+  // Process response body for logging — prefer the media-stripped JSON for
+  // AI responses so base64 image/audio output never lands in responseBody.
+  const responseBufferForLog = parsedBody
+    ? Buffer.from(safeJsonStringify(parsedBody))
+    : decompressedBuffer;
+  const { body: responseBody, truncated: responseTruncated, size: responseSize } = processBody(
+    responseBufferForLog,
+    maxBodySize
+  );
+
   // Update log
   if (logId && logEnabled) {
     await prisma.requestLog.update({
       where: { id: logId },
       data: {
         statusCode: proxyRes.statusCode,
-        responseHeaders: safeJsonStringify(proxyRes.headers),
+        responseHeaders: safeJsonStringify(redactHeadersForStorage(proxyRes.headers as Record<string, unknown>)),
         responseBody,
         responseTruncated,
         responseSize,

@@ -3,6 +3,7 @@ import { SmartBodyViewer } from './SmartBodyViewer';
 import { HeadersTable } from './HeadersTable';
 import { CopyButton, InlineCopyButton } from './CopyButton';
 import { generateCurl } from '../utils/curlGenerator';
+import { ContentPartsRenderer, ContentPart } from './ContentPartsRenderer';
 
 // Unified message shape as stored by src/lib/aiDetector.ts (camelCase)
 interface ToolCall {
@@ -18,6 +19,9 @@ interface ConversationMessage {
   toolName?: string;
   hasImages?: boolean;
   imageCount?: number;
+  hasAudio?: boolean;
+  audioCount?: number;
+  contentParts?: ContentPart[];
 }
 
 // Try to JSON-parse a string; if it parses, return pretty-printed JSON. Else return original.
@@ -30,6 +34,20 @@ function prettyIfJson(value: string): { text: string; isJson: boolean } {
   } catch {
     return { text: value, isJson: false };
   }
+}
+
+function contentPartsToText(parts: ContentPart[]): string {
+  const out: string[] = [];
+  for (const p of parts) {
+    if (p.type === 'text') out.push(p.text);
+    else if (p.type === 'reasoning') out.push(`[reasoning]\n${p.text}`);
+    else if (p.type === 'image') out.push('[image]');
+    else if (p.type === 'audio') out.push(p.transcript ? `[audio: ${p.transcript}]` : '[audio]');
+    else if (p.type === 'video') out.push('[video]');
+    else if (p.type === 'file') out.push(p.filename ? `[file: ${p.filename}]` : '[file]');
+    else if (p.type === 'file_annotation') out.push(`[parsed file: ${p.name ?? p.hash.slice(0, 8)}]`);
+  }
+  return out.join('\n').trim();
 }
 
 // Render-ready text for a single message (used for per-message copy + display fallback)
@@ -47,6 +65,9 @@ function messageToText(msg: ConversationMessage): string {
   if (msg.role === 'tool') {
     const header = msg.toolName ? `[tool: ${msg.toolName}]\n` : '';
     return header + (typeof msg.content === 'string' ? prettyIfJson(msg.content).text : '');
+  }
+  if (msg.contentParts && msg.contentParts.length > 0) {
+    return contentPartsToText(msg.contentParts);
   }
   return typeof msg.content === 'string' ? msg.content : '';
 }
@@ -76,6 +97,7 @@ interface RequestLog {
     provider: string;
     model: string | null;
     isStreaming: boolean;
+    kind?: string | null;
     promptTokens: number | null;
     completionTokens: number | null;
     totalTokens: number | null;
@@ -90,6 +112,8 @@ interface RequestLog {
     hasToolCalls: boolean;
     toolCallCount: number | null;
     toolNames: string | null;
+    embeddingInputCount?: number | null;
+    embeddingDimensions?: number | null;
   } | null;
 }
 
@@ -438,8 +462,13 @@ export function RequestDetailPanel({ requestId }: Props) {
                 </div>
               )}
 
+              {/* Embedding-specific view */}
+              {ai.kind === 'embedding' && (
+                <EmbeddingView ai={ai} />
+              )}
+
               {/* Conversation */}
-              {messages.length > 0 && (
+              {ai.kind !== 'embedding' && messages.length > 0 && (
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <h4 className="text-xs font-medium text-gray-500 uppercase">Conversation</h4>
@@ -464,6 +493,16 @@ export function RequestDetailPanel({ requestId }: Props) {
                                   ← <span className="text-amber-300 font-mono">{msg.toolName}</span>
                                 </span>
                               )}
+                              {msg.imageCount && msg.imageCount > 0 ? (
+                                <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-900/40 text-blue-300 normal-case">
+                                  {msg.imageCount} image{msg.imageCount > 1 ? 's' : ''}
+                                </span>
+                              ) : null}
+                              {msg.audioCount && msg.audioCount > 0 ? (
+                                <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-900/40 text-amber-300 normal-case">
+                                  {msg.audioCount} audio
+                                </span>
+                              ) : null}
                               {copyText && <InlineCopyButton text={copyText} alwaysVisible />}
                             </div>
                             <MessageBubble msg={msg} colors={colors} />
@@ -523,17 +562,26 @@ interface MessageBubbleProps {
 // Renders a single message bubble with role-specific formatting:
 // - assistant + tool_calls: shows each tool call as "→ tool_name(...pretty args...)"
 // - tool: shows "← tool_name → <pretty JSON of content>"
+// - multimodal (contentParts): images/audio/video/file/reasoning inline
 // - others: plain content, whitespace preserved
 function MessageBubble({ msg, colors }: MessageBubbleProps) {
-  const bubbleCls = `${colors.bg} border ${colors.border} rounded-lg p-2.5 text-xs text-gray-300 whitespace-pre-wrap break-words overflow-auto max-h-96`;
+  // Outer bubble — overflow is hidden so big children clip cleanly; inner content scrolls.
+  const bubbleCls = `${colors.bg} border ${colors.border} rounded-lg p-2.5 text-xs text-gray-300 break-words overflow-auto max-h-[32rem]`;
 
-  // Assistant with tool calls — render the call(s) instead of (or alongside) blank content
+  // Structured multimodal content takes precedence when present
+  const hasParts = !!(msg.contentParts && msg.contentParts.length > 0);
+
+  // Assistant with tool calls — render call(s) AND any multimodal parts
   if (msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0) {
     return (
       <div className={bubbleCls}>
-        {msg.content && msg.content.trim() !== '' && (
-          <div className="mb-2">{msg.content}</div>
-        )}
+        {hasParts ? (
+          <div className="mb-2">
+            <ContentPartsRenderer parts={msg.contentParts!} />
+          </div>
+        ) : msg.content && msg.content.trim() !== '' ? (
+          <div className="mb-2 whitespace-pre-wrap">{msg.content}</div>
+        ) : null}
         <div className="space-y-1.5">
           {msg.toolCalls.map((tc, idx) => {
             const name = tc.function?.name || 'unknown';
@@ -575,11 +623,89 @@ function MessageBubble({ msg, colors }: MessageBubbleProps) {
     );
   }
 
-  // Default (system/user/assistant-with-text)
+  // Default (system/user/assistant-with-text or multimodal)
+  if (hasParts) {
+    return (
+      <div className={bubbleCls}>
+        <ContentPartsRenderer parts={msg.contentParts!} />
+      </div>
+    );
+  }
   const content = typeof msg.content === 'string' ? msg.content : '';
   return (
-    <div className={bubbleCls}>
+    <div className={`${bubbleCls} whitespace-pre-wrap`}>
       {content || <span className="text-gray-500 italic">(no content)</span>}
+    </div>
+  );
+}
+
+/**
+ * Renderer for embedding requests. Shows the input texts (preview from the
+ * request body) and the vector summary (count + dimensionality) instead of a
+ * conversation, since embeddings have no chat-style messages.
+ */
+function EmbeddingView({ ai }: { ai: NonNullable<RequestLog['aiRequest']> }) {
+  let inputs: string[] = [];
+  let inputCount = ai.embeddingInputCount ?? 0;
+  try {
+    if (ai.fullRequest) {
+      const fr = JSON.parse(ai.fullRequest);
+      const raw = fr?.input;
+      if (typeof raw === 'string') {
+        inputs = [raw];
+        inputCount = inputCount || 1;
+      } else if (Array.isArray(raw)) {
+        inputs = raw.slice(0, 50).map((v: unknown) => (typeof v === 'string' ? v : JSON.stringify(v)));
+        inputCount = inputCount || raw.length;
+      }
+    }
+  } catch { /* ignore */ }
+
+  return (
+    <div className="space-y-3">
+      <div className="bg-[#1c2333] border border-[#30363d] rounded-lg p-3 flex flex-wrap gap-x-6 gap-y-2 text-xs">
+        <div>
+          <span className="text-gray-500">Inputs:</span>
+          <span className="ml-1 text-gray-200 font-mono">{inputCount.toLocaleString()}</span>
+        </div>
+        <div>
+          <span className="text-gray-500">Dimensions:</span>
+          <span className="ml-1 text-gray-200 font-mono">{ai.embeddingDimensions ?? '–'}</span>
+        </div>
+        <div>
+          <span className="text-gray-500">Prompt tokens:</span>
+          <span className="ml-1 text-gray-200 font-mono">{ai.promptTokens?.toLocaleString() ?? '–'}</span>
+        </div>
+        <div>
+          <span className="text-gray-500">Avg tokens/input:</span>
+          <span className="ml-1 text-gray-200 font-mono">
+            {ai.promptTokens && inputCount > 0 ? Math.round(ai.promptTokens / inputCount) : '–'}
+          </span>
+        </div>
+      </div>
+
+      {inputs.length > 0 && (
+        <div>
+          <h4 className="text-xs font-medium text-gray-500 uppercase mb-2">
+            Input texts {inputCount > inputs.length && <span className="ml-1 text-gray-600">({inputs.length} of {inputCount} shown)</span>}
+          </h4>
+          <div className="space-y-1.5">
+            {inputs.map((text, i) => (
+              <div key={i} className="bg-[#0d1117] border border-[#30363d] rounded p-2 text-xs">
+                <div className="flex items-start gap-2">
+                  <span className="text-gray-600 font-mono w-6 text-right shrink-0">{i + 1}.</span>
+                  <span className="text-gray-300 whitespace-pre-wrap break-words font-mono flex-1">{text}</span>
+                  <span className="text-gray-600 text-[10px] shrink-0">{text.length} chars</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="text-xs text-gray-500 italic">
+        Embedding vectors are not stored in the DB (would be ~{(ai.embeddingDimensions ?? 0) * 4} bytes × {inputCount} inputs). Use the upstream API directly to retrieve them.
+      </div>
     </div>
   );
 }
