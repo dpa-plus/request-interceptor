@@ -1,17 +1,17 @@
 import basicAuth from 'express-basic-auth';
 import rateLimit from 'express-rate-limit';
-import { Request, Response, NextFunction } from 'express';
+import { RequestHandler } from 'express';
 import { getAuthMode } from '../lib/authConfig.js';
 import { readSessionFromHeader, verifySession, SessionPayload } from '../lib/sessionCookie.js';
 
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'changeme';
 
-const basicAuthMiddleware = basicAuth({
+const basicAuthMiddleware: RequestHandler = basicAuth({
   users: { [ADMIN_USER]: ADMIN_PASSWORD },
   challenge: true,
   realm: 'Request Interceptor Admin',
-});
+}) as unknown as RequestHandler;
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -28,16 +28,13 @@ declare global {
  * session cookie; rejects with 401 + JSON body `{ requiresLogin: true,
  * loginUrl: '/auth/google/login' }` so the frontend can render its login UI.
  */
-export function adminAuth(req: Request, res: Response, next: NextFunction): void {
-  const mode = getAuthMode();
-  if (mode === 'basic') {
-    basicAuthMiddleware(req as any, res as any, next);
+export const adminAuth: RequestHandler = (req, res, next) => {
+  if (getAuthMode() === 'basic') {
+    basicAuthMiddleware(req, res, next);
     return;
   }
 
-  // OAuth mode
-  const sessionToken = readSessionFromHeader(req.headers.cookie);
-  const session = verifySession(sessionToken);
+  const session = verifySession(readSessionFromHeader(req.headers.cookie));
   if (session) {
     req.authUser = session;
     next();
@@ -48,7 +45,7 @@ export function adminAuth(req: Request, res: Response, next: NextFunction): void
     requiresLogin: true,
     loginUrl: '/auth/google/login',
   });
-}
+};
 
 export const rateLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute

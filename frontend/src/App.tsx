@@ -80,46 +80,10 @@ function App() {
             DPA+
           </a>
           <div className="flex items-center gap-1 flex-1 justify-center">
-            <NavLink
-              to="/"
-              className={({ isActive }) =>
-                `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  isActive ? 'bg-[#1f6feb33] text-[#58a6ff]' : 'text-gray-400 hover:text-gray-200 hover:bg-[#1c2333]'
-                }`
-              }
-            >
-              Requests
-            </NavLink>
-            <NavLink
-              to="/ai"
-              className={({ isActive }) =>
-                `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  isActive ? 'bg-[#8b5cf633] text-[#a78bfa]' : 'text-gray-400 hover:text-gray-200 hover:bg-[#1c2333]'
-                }`
-              }
-            >
-              AI
-            </NavLink>
-            <NavLink
-              to="/routing"
-              className={({ isActive }) =>
-                `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  isActive ? 'bg-[#1f6feb33] text-[#58a6ff]' : 'text-gray-400 hover:text-gray-200 hover:bg-[#1c2333]'
-                }`
-              }
-            >
-              Routing
-            </NavLink>
-            <NavLink
-              to="/settings"
-              className={({ isActive }) =>
-                `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  isActive ? 'bg-[#1f6feb33] text-[#58a6ff]' : 'text-gray-400 hover:text-gray-200 hover:bg-[#1c2333]'
-                }`
-              }
-            >
-              Settings
-            </NavLink>
+            <NavItem to="/" label="Requests" activeClasses="bg-[#1f6feb33] text-[#58a6ff]" />
+            <NavItem to="/ai" label="AI" activeClasses="bg-[#8b5cf633] text-[#a78bfa]" />
+            <NavItem to="/routing" label="Routing" activeClasses="bg-[#1f6feb33] text-[#58a6ff]" />
+            <NavItem to="/settings" label="Settings" activeClasses="bg-[#1f6feb33] text-[#58a6ff]" />
           </div>
           <UserMenu auth={auth} />
         </div>
@@ -136,6 +100,22 @@ function App() {
         </Routes>
       </main>
     </div>
+  );
+}
+
+function NavItem({ to, label, activeClasses }: { to: string; label: string; activeClasses: string }) {
+  return (
+    <NavLink
+      to={to}
+      end={to === '/'}
+      className={({ isActive }) =>
+        `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+          isActive ? activeClasses : 'text-gray-400 hover:text-gray-200 hover:bg-[#1c2333]'
+        }`
+      }
+    >
+      {label}
+    </NavLink>
   );
 }
 

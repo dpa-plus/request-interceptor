@@ -5,6 +5,7 @@ import {
   extractImagesField,
   extractFileAnnotations,
 } from './multimodalProcessor.js';
+import { storeBase64 } from './mediaStorage.js';
 
 // OpenAI-compatible endpoints
 const AI_ENDPOINTS = [
@@ -651,7 +652,6 @@ export async function parseStreamedResponse(chunks: string[]): Promise<ParsedAiR
     const fullAudioBase64 = audioDataChunks.join('');
     const format = audioFormat || 'wav';
     const mime = `audio/${format === 'mp3' ? 'mpeg' : format}`;
-    const { storeBase64 } = await import('./mediaStorage.js');
     const ref = await storeBase64(fullAudioBase64, mime);
     if (ref) {
       assistantContentParts.push({

@@ -62,6 +62,10 @@ model AiRequest {
 
   // Messages (vereinfacht für Übersicht - Legacy)
   systemPrompt    String?
+  // 12-char SHA256 prefix of the (verbatim) system prompt. Used by the UI to
+  // visually cluster requests that share the same prompt; null when there is
+  // no system prompt.
+  systemPromptHash String?
   userMessages    String?  // JSON Array
   assistantResponse String?
 
@@ -119,6 +123,7 @@ model AiRequest {
   @@index([model])
   @@index([createdAt])
   @@index([openrouterGenerationId])
+  @@index([systemPromptHash])
 }
 
 model RoutingRule {

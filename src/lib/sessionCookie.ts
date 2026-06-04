@@ -20,11 +20,13 @@ export function getSessionTtlSeconds(): number {
   return SESSION_TTL_SECONDS;
 }
 
+const MIN_SESSION_SECRET_LENGTH = 32;
+
 function getSecret(): Buffer {
   const secret = process.env.SESSION_SECRET;
-  if (!secret || secret.length < 16) {
+  if (!secret || secret.length < MIN_SESSION_SECRET_LENGTH) {
     throw new Error(
-      'SESSION_SECRET must be set to a string of at least 16 characters when OAUTH_PROVIDER is enabled.'
+      `SESSION_SECRET must be set to a string of at least ${MIN_SESSION_SECRET_LENGTH} characters when OAUTH_PROVIDER is enabled. Generate one with: openssl rand -hex 32`
     );
   }
   return Buffer.from(secret, 'utf-8');

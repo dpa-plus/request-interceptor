@@ -1,4 +1,12 @@
-import { MediaRef, storeDataUrl, storeBase64, buildMediaUrl } from './mediaStorage.js';
+import {
+  MediaRef,
+  storeDataUrl,
+  storeBase64,
+  buildMediaUrl,
+  readMediaFile,
+  mimeFromExt,
+  parseMediaUrl,
+} from './mediaStorage.js';
 
 export type ContentPart =
   | { type: 'text'; text: string }
@@ -12,103 +20,92 @@ export type ContentPart =
   | { type: 'tool_result'; toolCallId: string; content: string | ContentPart[]; isError?: boolean };
 
 /**
- * Walk a parsed request/response body and:
- * 1. Extract every inline base64/data-URL media blob, persist it via mediaStorage,
- *    and replace the inline data with a `media:<hash>.<ext>` pseudo-URL.
- * 2. Return the modified body (in-place mutation).
+ * Walk a parsed request/response body in place and replace every inline
+ * base64/data-URL media blob with a `media:<hash>.<ext>` pseudo-URL after
+ * persisting the bytes via mediaStorage. Mutates the input — callers don't
+ * need to read the return value.
  *
- * The walker recognizes:
+ * Recognized shapes:
  * - OpenAI/OpenRouter `image_url.url` data URLs
  * - Anthropic `image.source.{type:base64, media_type, data}` blocks
  * - OpenAI `input_audio.{data, format}` blocks (raw base64)
  * - OpenAI `audio.data` output blocks (raw base64, format on parent message)
- * - OpenRouter `file.file_data` data URLs (PDFs etc.)
+ * - OpenRouter `file.file_data` data URLs (PDFs etc., snake + camelCase)
  * - Anthropic `document.source.{type:base64, media_type, data}` blocks
  * - OpenRouter image-output `images[].image_url.url` data URLs
  * - OpenRouter PDF `annotations[].file.content[]` (image_url data URLs nested)
  * - OpenAI `video_url.url` data URLs
  */
-export async function stripInlineMedia(node: unknown): Promise<unknown> {
-  if (node === null || node === undefined) return node;
-  if (typeof node !== 'object') return node;
+export async function stripInlineMedia(node: unknown): Promise<void> {
+  if (node === null || node === undefined) return;
+  if (typeof node !== 'object') return;
 
   if (Array.isArray(node)) {
-    for (let i = 0; i < node.length; i++) {
-      node[i] = await stripInlineMedia(node[i]);
-    }
-    return node;
+    await Promise.all(node.map((item) => stripInlineMedia(item)));
+    return;
   }
 
   const obj = node as Record<string, unknown>;
 
-  // OpenAI/OpenRouter image_url.url
-  if (isDataUrlString(obj.url) && (obj as any).__parent_type === undefined) {
-    // generic data: URL inside any object: replace
-    const ref = await storeDataUrl(obj.url as string);
+  // Generic: any object holding a data:-URL on `url` (covers image_url, video_url, etc.)
+  if (typeof obj.url === 'string' && obj.url.startsWith('data:')) {
+    const ref = await storeDataUrl(obj.url);
     if (ref) obj.url = buildMediaUrl(ref);
   }
 
-  // Anthropic image / document blocks: { type: 'image'|'document', source: {type:'base64', media_type, data} }
-  // OR newer Anthropic: source: {type:'url', url}
   const t = obj.type;
+
+  // Anthropic image / document blocks: source.{type:'base64', media_type, data}
   if ((t === 'image' || t === 'document') && obj.source && typeof obj.source === 'object') {
     const src = obj.source as Record<string, unknown>;
-    if (src.type === 'base64' && typeof src.data === 'string') {
+    if (src.type === 'base64' && typeof src.data === 'string' && !src.data.startsWith('media:')) {
       const mime = typeof src.media_type === 'string' ? src.media_type : 'application/octet-stream';
       const ref = await storeBase64(src.data, mime);
-      if (ref) {
-        src.data = `media:${ref.hash}.${ref.ext}`;
+      if (ref) src.data = buildMediaUrl(ref);
+    }
+  }
+
+  // OpenAI input_audio: { input_audio: { data: '<base64>', format: 'wav' } }
+  if (t === 'input_audio' && obj.input_audio && typeof obj.input_audio === 'object') {
+    await stripRawBase64Field(obj.input_audio as Record<string, unknown>);
+  }
+
+  // OpenRouter file (PDF) input: { file: { filename, file_data: 'data:...' } } incl. camelCase
+  if (t === 'file' && obj.file && typeof obj.file === 'object') {
+    const f = obj.file as Record<string, unknown>;
+    for (const key of ['file_data', 'fileData']) {
+      const v = f[key];
+      if (typeof v === 'string' && v.startsWith('data:')) {
+        const ref = await storeDataUrl(v);
+        if (ref) f[key] = buildMediaUrl(ref);
       }
     }
   }
 
-  // OpenAI input_audio: { type: 'input_audio', input_audio: { data: '<base64>', format: 'wav' } }
-  if (t === 'input_audio' && obj.input_audio && typeof obj.input_audio === 'object') {
-    const ia = obj.input_audio as Record<string, unknown>;
-    if (typeof ia.data === 'string' && !ia.data.startsWith('media:')) {
-      const format = typeof ia.format === 'string' ? ia.format : 'wav';
-      const mime = `audio/${format === 'mp3' ? 'mpeg' : format}`;
-      const ref = await storeBase64(ia.data, mime);
-      if (ref) ia.data = `media:${ref.hash}.${ref.ext}`;
-    }
-  }
-
-  // OpenRouter file (PDF): { type: 'file', file: { filename, file_data: 'data:application/pdf;base64,...' } }
-  if (t === 'file' && obj.file && typeof obj.file === 'object') {
-    const f = obj.file as Record<string, unknown>;
-    if (typeof f.file_data === 'string' && f.file_data.startsWith('data:')) {
-      const ref = await storeDataUrl(f.file_data);
-      if (ref) f.file_data = buildMediaUrl(ref);
-    }
-    // camelCase variant (some SDKs)
-    if (typeof (f as any).fileData === 'string' && (f as any).fileData.startsWith('data:')) {
-      const ref = await storeDataUrl((f as any).fileData as string);
-      if (ref) (f as any).fileData = buildMediaUrl(ref);
-    }
-  }
-
-  // OpenAI output audio: { audio: { data: '<base64>', format, transcript, id, expires_at } } on message
+  // OpenAI output audio: { audio: { data: '<base64>', format, transcript } } on message
   if (obj.audio && typeof obj.audio === 'object' && !Array.isArray(obj.audio)) {
     const a = obj.audio as Record<string, unknown>;
-    if (typeof a.data === 'string' && !a.data.startsWith('media:') && a.data.length > 100) {
-      const format = typeof a.format === 'string' ? a.format : 'wav';
-      const mime = `audio/${format === 'mp3' ? 'mpeg' : format}`;
-      const ref = await storeBase64(a.data, mime);
-      if (ref) a.data = `media:${ref.hash}.${ref.ext}`;
+    // Skip tiny strings — those are message IDs / transcripts, not audio bytes
+    if (typeof a.data === 'string' && a.data.length > 100) {
+      await stripRawBase64Field(a);
     }
   }
 
-  // Recurse into all child properties (mutating). Skip `url` since handled above
-  // for the generic case; revisit it as a child is fine because it's already a string.
-  for (const key of Object.keys(obj)) {
-    obj[key] = await stripInlineMedia(obj[key]);
-  }
-
-  return obj;
+  // Recurse in parallel into all children
+  await Promise.all(Object.keys(obj).map((key) => stripInlineMedia(obj[key])));
 }
 
-function isDataUrlString(v: unknown): v is string {
-  return typeof v === 'string' && v.startsWith('data:');
+/**
+ * Persist a raw-base64 `data` field with a sibling `format` to media storage
+ * and replace the data with a media: ref. Shared between OpenAI input_audio
+ * (input side) and audio output blocks.
+ */
+async function stripRawBase64Field(holder: Record<string, unknown>): Promise<void> {
+  if (typeof holder.data !== 'string' || holder.data.startsWith('media:')) return;
+  const format = typeof holder.format === 'string' ? holder.format : 'wav';
+  const mime = `audio/${format === 'mp3' ? 'mpeg' : format}`;
+  const ref = await storeBase64(holder.data, mime);
+  if (ref) holder.data = buildMediaUrl(ref);
 }
 
 /**
@@ -327,30 +324,23 @@ export function extractFileAnnotations(annotations: unknown): ContentPart[] {
  * Used by the replay endpoint so we can send the original payload upstream.
  */
 export async function rehydrateInlineMedia(node: unknown): Promise<unknown> {
-  const { readMediaFile, mimeFromExt, parseMediaUrl } = await import('./mediaStorage.js');
-  return walk(node);
-
-  async function walk(n: unknown): Promise<unknown> {
-    if (n === null || n === undefined) return n;
-    if (typeof n === 'string') {
-      const ref = parseMediaUrl(n);
-      if (!ref) return n;
-      const bytes = await readMediaFile(ref.hash, ref.ext);
-      if (!bytes) return n;
-      const mime = mimeFromExt(ref.ext);
-      return `data:${mime};base64,${bytes.toString('base64')}`;
-    }
-    if (Array.isArray(n)) {
-      const out: unknown[] = [];
-      for (const item of n) out.push(await walk(item));
-      return out;
-    }
-    if (typeof n === 'object') {
-      const obj = n as Record<string, unknown>;
-      const out: Record<string, unknown> = {};
-      for (const k of Object.keys(obj)) out[k] = await walk(obj[k]);
-      return out;
-    }
-    return n;
+  if (node === null || node === undefined) return node;
+  if (typeof node === 'string') {
+    const ref = parseMediaUrl(node);
+    if (!ref) return node;
+    const bytes = await readMediaFile(ref.hash, ref.ext);
+    if (!bytes) return node;
+    return `data:${mimeFromExt(ref.ext)};base64,${bytes.toString('base64')}`;
   }
+  if (Array.isArray(node)) {
+    return Promise.all(node.map((item) => rehydrateInlineMedia(item)));
+  }
+  if (typeof node === 'object') {
+    const obj = node as Record<string, unknown>;
+    const entries = await Promise.all(
+      Object.keys(obj).map(async (k) => [k, await rehydrateInlineMedia(obj[k])] as const)
+    );
+    return Object.fromEntries(entries);
+  }
+  return node;
 }

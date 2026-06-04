@@ -1,14 +1,24 @@
 // Sensitive header names that should never be stored in plaintext beyond the
 // configured retention window. Comparison is case-insensitive.
 const SENSITIVE_HEADERS = new Set([
+  // Generic
   'authorization',
   'proxy-authorization',
-  'x-api-key',
-  'api-key',
-  'x-auth-token',
-  'x-amz-security-token',
   'cookie',
   'set-cookie',
+  // Common API key headers
+  'api-key',
+  'x-api-key',
+  'x-auth-token',
+  // Cloud providers
+  'x-amz-security-token',
+  'x-goog-api-key',
+  'x-azure-api-key',
+  // AI providers
+  'anthropic-api-key',
+  'openai-api-key',
+  'x-openai-api-key',
+  'openrouter-api-key',
 ]);
 
 export const REDACTED_VALUE = '[REDACTED]';

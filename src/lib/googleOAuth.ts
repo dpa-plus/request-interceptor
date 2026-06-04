@@ -74,11 +74,23 @@ export function getStateCookieName(): string {
 export function parseStateToken(token: string): { returnTo: string } | null {
   try {
     const payload = JSON.parse(Buffer.from(token, 'base64url').toString('utf-8')) as { r?: unknown };
-    const returnTo = typeof payload.r === 'string' && payload.r.startsWith('/') ? payload.r : '/';
+    const returnTo = typeof payload.r === 'string' ? sanitizeReturnTo(payload.r) : '/';
     return { returnTo };
   } catch {
     return null;
   }
+}
+
+/**
+ * Constrain `returnTo` to a same-origin path. Rejects protocol-relative URLs
+ * (`//evil.com/...`), backslash-prefixed paths (`/\evil.com`, IE quirk), and
+ * anything that doesn't start with `/`. Returns `/` for invalid input.
+ */
+export function sanitizeReturnTo(raw: string): string {
+  if (typeof raw !== 'string' || raw.length === 0) return '/';
+  if (!raw.startsWith('/')) return '/';
+  if (raw.startsWith('//') || raw.startsWith('/\\')) return '/';
+  return raw;
 }
 
 /**

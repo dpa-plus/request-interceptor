@@ -26,6 +26,7 @@ import {
   fetchUserInfo,
   getStateCookieName,
   parseStateToken,
+  sanitizeReturnTo,
 } from './lib/googleOAuth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -113,8 +114,8 @@ export function createAdminApp() {
       res.status(500).send('Google OAuth is enabled but client credentials are not configured.');
       return;
     }
-    const returnTo = typeof req.query.returnTo === 'string' && req.query.returnTo.startsWith('/')
-      ? req.query.returnTo
+    const returnTo = typeof req.query.returnTo === 'string'
+      ? sanitizeReturnTo(req.query.returnTo)
       : '/';
     const secure = isHttpsRequest(req);
     const { token: state, cookie: stateCookie } = buildStateCookie(returnTo, secure);
@@ -205,12 +206,14 @@ export function createAdminApp() {
       const to = req.query.to as string;
       const search = req.query.search as string;
       const statusFilter = req.query.status as string; // "2xx", "3xx", "4xx", "5xx", "errors"
+      const systemPromptHash = req.query.systemPromptHash as string;
 
       const where: any = {};
 
       if (method) where.method = method;
       if (isAiRequest !== undefined) where.isAiRequest = isAiRequest === 'true';
       if (targetUrl) where.targetUrl = { contains: targetUrl };
+      if (systemPromptHash) where.aiRequest = { systemPromptHash };
       if (from || to) {
         where.createdAt = {};
         if (from) where.createdAt.gte = new Date(from);
@@ -253,6 +256,7 @@ export function createAdminApp() {
                 isStreaming: true,
                 totalTokens: true,
                 totalCostMicros: true,
+                systemPromptHash: true,
               },
             },
           },
@@ -331,11 +335,13 @@ export function createAdminApp() {
       const model = req.query.model as string;
       const from = req.query.from as string;
       const to = req.query.to as string;
+      const systemPromptHash = req.query.systemPromptHash as string;
 
       const where: any = {};
 
       if (provider) where.provider = provider;
       if (model) where.model = { contains: model };
+      if (systemPromptHash) where.systemPromptHash = systemPromptHash;
       if (from || to) {
         where.createdAt = {};
         if (from) where.createdAt.gte = new Date(from);
@@ -361,6 +367,7 @@ export function createAdminApp() {
             timeToFirstToken: true,
             totalDuration: true,
             createdAt: true,
+            systemPromptHash: true,
             // Tool-call metadata
             hasToolCalls: true,
             toolCallCount: true,
