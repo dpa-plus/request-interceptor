@@ -792,7 +792,7 @@ function Dashboard() {
         {/* Column headers (only in full-width mode) */}
         {!showRightPane && (
           <div className="grid border-b border-[#30363d] text-[13px] font-bold text-gray-300 uppercase tracking-wider select-none bg-[#161b22] px-3 py-2.5"
-            style={{ gridTemplateColumns: '24px 64px 60px 1fr 80px 56px 80px', gap: '0 16px' }}>
+            style={{ gridTemplateColumns: '24px 64px 60px minmax(0,1fr) 80px 160px 80px', gap: '0 16px' }}>
             <span />
             <span>Method</span>
             <span>Status</span>
@@ -818,7 +818,7 @@ function Dashboard() {
               const isToday = ts.toDateString() === new Date().toDateString();
               const timeStr = isToday ? ts.toLocaleTimeString() : `${ts.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })} ${ts.toLocaleTimeString()}`;
               const rowStyle: React.CSSProperties = {
-                gridTemplateColumns: '24px 64px 60px 1fr 80px 56px 80px',
+                gridTemplateColumns: '24px 64px 60px minmax(0,1fr) 80px 160px 80px',
                 columnGap: '16px',
                 ...(groupColor && !isActive ? { borderLeftColor: groupColor } : {}),
               };
@@ -847,15 +847,15 @@ function Dashboard() {
                   }`}>
                     {log.responseTime ? `${log.responseTime}ms` : ''}
                   </span>
-                  <span className="text-right flex items-center justify-end gap-1.5">
+                  <span className="text-right flex items-center justify-end gap-1.5 min-w-0">
                     <PromptChip
                       hash={log.aiRequest?.systemPromptHash ?? null}
                       active={promptHashFilter === log.aiRequest?.systemPromptHash}
                       onToggle={(h) => updateParam('promptHash', promptHashFilter === h ? '' : h)}
                     />
                     {log.isAiRequest && log.aiRequest ? (
-                      <span className="px-1.5 py-0.5 rounded bg-purple-900/40 text-purple-300 text-[11px] truncate">
-                        {(log.aiRequest.model || 'AI').replace(/^.*\//, '').slice(0, 8)}
+                      <span className="px-1.5 py-0.5 rounded bg-purple-900/40 text-purple-300 text-[11px] truncate min-w-0" title={log.aiRequest.model || 'AI'}>
+                        {(log.aiRequest.model || 'AI').replace(/^.*\//, '')}
                       </span>
                     ) : log.isAiRequest ? (
                       <span className="px-1.5 py-0.5 rounded bg-purple-900/40 text-purple-300 text-[11px]">AI</span>
