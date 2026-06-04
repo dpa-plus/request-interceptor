@@ -261,7 +261,7 @@ function RequestDetail() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="max-w-7xl mx-auto px-6 py-4 overflow-auto h-[calc(100vh-44px)] space-y-4">
       {/* Compact Header with inline stats */}
       <div className="bg-[#161b22] rounded-lg border border-[#30363d] px-4 py-3">
         <div className="flex items-center justify-between gap-4">

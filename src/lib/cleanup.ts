@@ -100,24 +100,44 @@ async function deleteOrphanMedia(): Promise<number> {
   const files = await listAllMediaFiles();
   if (files.length === 0) return 0;
 
-  // Build a set of referenced hashes by scanning AiRequest.messages and
-  // fullRequest/fullResponse. SQLite LIKE-scan is acceptable since these
-  // columns are small after stripping (hash is a fixed 64-char hex).
+  // Build a set of referenced hashes by scanning AiRequest blob columns.
+  // We cursor-paginate AND pre-filter on `contains: 'media:'` so we never
+  // load rows that don't reference media at all. Without this, the original
+  // implementation loaded every AiRequest row's messages+fullRequest+fullResponse
+  // (avg ~400 KB/row, max 40 MB for image-gen responses) into Node memory,
+  // which OOM'd the container at boot once /data/media was non-empty.
   const referenced = new Set<string>();
-  const rows = await prisma.aiRequest.findMany({
-    select: { messages: true, fullRequest: true, fullResponse: true },
-  });
-
   const HASH_RE = /media:([a-f0-9]{64})\.[a-z0-9]{1,8}/gi;
-  for (const row of rows) {
-    for (const blob of [row.messages, row.fullRequest, row.fullResponse]) {
-      if (!blob) continue;
-      let m: RegExpExecArray | null;
-      HASH_RE.lastIndex = 0;
-      while ((m = HASH_RE.exec(blob)) !== null) {
-        referenced.add(m[1].toLowerCase());
+  const PAGE_SIZE = 25;
+  const where = {
+    OR: [
+      { messages: { contains: 'media:' } },
+      { fullRequest: { contains: 'media:' } },
+      { fullResponse: { contains: 'media:' } },
+    ],
+  };
+  let cursor: string | undefined;
+  while (true) {
+    const batch = await prisma.aiRequest.findMany({
+      where,
+      take: PAGE_SIZE,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      orderBy: { id: 'asc' },
+      select: { id: true, messages: true, fullRequest: true, fullResponse: true },
+    });
+    if (batch.length === 0) break;
+    for (const row of batch) {
+      for (const blob of [row.messages, row.fullRequest, row.fullResponse]) {
+        if (!blob) continue;
+        HASH_RE.lastIndex = 0;
+        let m: RegExpExecArray | null;
+        while ((m = HASH_RE.exec(blob)) !== null) {
+          referenced.add(m[1].toLowerCase());
+        }
       }
     }
+    cursor = batch[batch.length - 1].id;
+    if (batch.length < PAGE_SIZE) break;
   }
 
   const graceCutoff = Date.now() - MEDIA_ORPHAN_GRACE_DAYS * 24 * 60 * 60 * 1000;
