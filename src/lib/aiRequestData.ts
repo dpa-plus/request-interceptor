@@ -37,6 +37,7 @@ export function buildAiRequestData(opts: BuildOpts) {
   return {
     provider: parsedAiReq.provider,
     endpoint: parsedAiReq.endpoint,
+    kind: parsedAiReq.kind,
     model: parsedResponse.model || parsedAiReq.model,
     isStreaming,
     systemPrompt: parsedAiReq.systemPrompt,
@@ -57,6 +58,8 @@ export function buildAiRequestData(opts: BuildOpts) {
     totalCostMicros: cost.totalCostMicros,
     timeToFirstToken,
     totalDuration,
+    embeddingInputCount: parsedAiReq.embeddingInputCount ?? null,
+    embeddingDimensions: parsedResponse.embeddingDimensions ?? null,
     ...(openrouterGenerationId ? { openrouterGenerationId } : {}),
   };
 }

@@ -56,6 +56,7 @@ import {
   isOpenRouter,
   extractOpenRouterGenerationId,
   extractOpenRouterGenerationIdFromChunks,
+  stripEmbeddingVectors,
   ConversationMessage,
   ParsedAiResponse,
 } from './lib/aiDetector.js';
@@ -574,9 +575,14 @@ async function handleRegularResponse(
     if (parsedBody) {
       try {
         // Extract inline media (output images, audio data, parsed PDF annotations)
-        // before storing the response in the DB.
+        // and embedding vectors before storing the response in the DB. Both can
+        // bloat rows by orders of magnitude (audio: MB, embeddings: ~6KB per
+        // vector × N inputs → easily 10MB+ per row otherwise). We strip
+        // embeddings AFTER parseAiResponse so the parser can read the original
+        // vector dimensions before they're nulled out.
         await stripInlineMedia(parsedBody);
         const parsedResponse = parseAiResponse(parsedBody, false);
+        stripEmbeddingVectors(parsedBody);
         const cost = await calculateCost(
           parsedResponse.model || parsedAiReq.model,
           parsedResponse.promptTokens,

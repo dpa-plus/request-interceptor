@@ -58,9 +58,12 @@ export interface ConversationMessage {
   contentParts?: ContentPart[];
 }
 
+export type AiRequestKind = 'chat' | 'embedding' | 'audio' | 'image' | 'moderation';
+
 export interface ParsedAiRequest {
   provider: AiProvider;
   endpoint: string;
+  kind: AiRequestKind;
   model: string | null;
   isStreaming: boolean;
   systemPrompt: string | null;
@@ -72,6 +75,9 @@ export interface ParsedAiRequest {
   hasToolCalls: boolean;
   toolCallCount: number;
   toolNames: string[];
+  // Embedding-specific
+  embeddingInputCount?: number;
+  embeddingInputPreview?: string[];
 }
 
 export interface ParsedAiResponse {
@@ -87,6 +93,9 @@ export interface ParsedAiResponse {
   // Structured multimodal output (images, audio, reasoning, file annotations).
   // Populated alongside the legacy text `assistantResponse` for backwards compat.
   assistantContentParts?: ContentPart[];
+  // Embedding-specific: filled in by parseEmbeddingResponse
+  embeddingCount?: number;
+  embeddingDimensions?: number;
 }
 
 export interface CostEstimate {
@@ -97,6 +106,28 @@ export interface CostEstimate {
 
 export function isAiEndpoint(path: string): boolean {
   return AI_ENDPOINT_PATTERNS.some(pattern => pattern.test(path));
+}
+
+/**
+ * Classify the AI endpoint so the UI / stats can group requests sensibly.
+ * Falls back to 'chat' since chat/completions is the dominant case.
+ */
+export function detectKind(path: string): AiRequestKind {
+  const lower = path.toLowerCase();
+  if (lower.includes('/embeddings')) return 'embedding';
+  if (lower.includes('/audio/')) return 'audio';
+  if (lower.includes('/images/')) return 'image';
+  if (lower.includes('/moderations')) return 'moderation';
+  return 'chat';
+}
+
+/**
+ * Truncate a string to a max length with an ellipsis. Embedding input
+ * previews use this so we don't store full document text per row.
+ */
+function truncatePreview(s: string, max: number = 200): string {
+  if (s.length <= max) return s;
+  return s.slice(0, max) + '…';
 }
 
 export function detectProvider(targetUrl: string, headers: Record<string, any>): AiProvider {
@@ -153,6 +184,7 @@ export function extractOpenRouterGenerationIdFromChunks(chunks: any[]): string |
 
 export function parseAiRequest(body: any, path: string, targetUrl: string, headers: Record<string, any>): ParsedAiRequest {
   const provider = detectProvider(targetUrl, headers);
+  const kind = detectKind(path);
   const isStreaming = body?.stream === true;
 
   let systemPrompt: string | null = null;
@@ -161,6 +193,25 @@ export function parseAiRequest(body: any, path: string, targetUrl: string, heade
   const toolNames: Set<string> = new Set();
   let toolCallCount = 0;
   let model: string | null = body?.model || null;
+
+  // Embedding requests have `input` (string | string[]) instead of `messages`.
+  // We don't store the full corpus — capture the count plus a short preview of
+  // each entry so the UI can render "3 inputs: 'foo…', 'bar…', …".
+  let embeddingInputCount: number | undefined;
+  let embeddingInputPreview: string[] | undefined;
+  if (kind === 'embedding') {
+    const input = body?.input;
+    if (typeof input === 'string') {
+      embeddingInputCount = 1;
+      embeddingInputPreview = [truncatePreview(input)];
+    } else if (Array.isArray(input)) {
+      embeddingInputCount = input.length;
+      // Cap the preview list — large batch jobs can have thousands of entries.
+      embeddingInputPreview = input.slice(0, 5).map((v: unknown) =>
+        truncatePreview(typeof v === 'string' ? v : JSON.stringify(v))
+      );
+    }
+  }
 
   // Parse messages for chat completions
   if (Array.isArray(body?.messages)) {
@@ -255,6 +306,7 @@ export function parseAiRequest(body: any, path: string, targetUrl: string, heade
   return {
     provider,
     endpoint: path,
+    kind,
     model,
     isStreaming,
     systemPrompt,
@@ -264,7 +316,33 @@ export function parseAiRequest(body: any, path: string, targetUrl: string, heade
     hasToolCalls: toolCallCount > 0,
     toolCallCount,
     toolNames: Array.from(toolNames),
+    embeddingInputCount,
+    embeddingInputPreview,
   };
+}
+
+/**
+ * Replace the (potentially MB-sized) embedding vectors in an embedding
+ * response with `null` placeholders before the body lands in the DB. Records
+ * the dimensionality of the first vector so the UI can still display it.
+ *
+ * Mutates `body` in place. Returns the detected vector dimension, or null
+ * if no embeddings were found.
+ */
+export function stripEmbeddingVectors(body: any): { count: number; dimensions: number | null } | null {
+  if (!body || !Array.isArray(body.data)) return null;
+  let dimensions: number | null = null;
+  let count = 0;
+  for (const entry of body.data) {
+    if (!entry || typeof entry !== 'object') continue;
+    const e = entry as { embedding?: unknown };
+    if (Array.isArray(e.embedding)) {
+      if (dimensions === null) dimensions = e.embedding.length;
+      e.embedding = null;
+      count++;
+    }
+  }
+  return count > 0 ? { count, dimensions } : null;
 }
 
 /**
@@ -487,6 +565,18 @@ export function parseAiResponse(body: any, isStreaming: boolean): ParsedAiRespon
 
   model = body.model || null;
 
+  // Embedding responses: count + dimensions are extracted by the caller via
+  // stripEmbeddingVectors() since stripping must happen before we serialize.
+  let embeddingCount: number | undefined;
+  let embeddingDimensions: number | undefined;
+  if (Array.isArray(body.data) && body.data.some((d: any) => 'embedding' in (d ?? {}))) {
+    embeddingCount = body.data.length;
+    const first = body.data.find((d: any) => Array.isArray(d?.embedding) || d?.embedding === null);
+    if (first && Array.isArray(first.embedding)) {
+      embeddingDimensions = first.embedding.length;
+    }
+  }
+
   return {
     assistantResponse,
     promptTokens,
@@ -497,6 +587,8 @@ export function parseAiResponse(body: any, isStreaming: boolean): ParsedAiRespon
     toolCalls,
     finishReason,
     assistantContentParts: assistantContentParts.length > 0 ? assistantContentParts : undefined,
+    embeddingCount,
+    embeddingDimensions,
   };
 }
 

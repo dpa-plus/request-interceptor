@@ -9,6 +9,15 @@ import { getModelInfo, getContextLength } from './lib/modelInfoService.js';
 import { invalidateRoutingCache } from './lib/routing.js';
 import { readMediaFile, mimeFromExt } from './lib/mediaStorage.js';
 import { rehydrateInlineMedia } from './lib/multimodalProcessor.js';
+import {
+  resolveRange,
+  getSummary,
+  getTimeseries,
+  getTopPrompts,
+  getLatency,
+  getOpenRouterStats,
+  Bucket,
+} from './lib/stats.js';
 import { getAuthMode, getGoogleConfig, isAccountAllowed, resolvePublicAdminUrl, isHttpsRequest } from './lib/authConfig.js';
 import {
   buildSessionCookie,
@@ -358,6 +367,7 @@ export function createAdminApp() {
             id: true,
             provider: true,
             endpoint: true,
+            kind: true,
             model: true,
             isStreaming: true,
             promptTokens: true,
@@ -368,6 +378,8 @@ export function createAdminApp() {
             totalDuration: true,
             createdAt: true,
             systemPromptHash: true,
+            embeddingInputCount: true,
+            embeddingDimensions: true,
             // Tool-call metadata
             hasToolCalls: true,
             toolCallCount: true,
@@ -733,165 +745,66 @@ export function createAdminApp() {
   });
 
   // ==================== STATS ====================
+  // All stats endpoints accept ?from / ?to ISO timestamps and default to the
+  // last 30 days. Results are TTL-cached (30–60s) to keep dashboard polling
+  // off the DB during normal usage.
 
   app.get('/api/stats', async (req, res) => {
     try {
-      const from = req.query.from as string;
-      const to = req.query.to as string;
-
-      const dateFilter: any = {};
-      if (from || to) {
-        dateFilter.createdAt = {};
-        if (from) dateFilter.createdAt.gte = new Date(from);
-        if (to) dateFilter.createdAt.lte = new Date(to);
-      }
-
-      const [
-        totalRequests,
-        totalAiRequests,
-        aiStats,
-        recentErrors,
-        requestsByMethod,
-      ] = await Promise.all([
-        prisma.requestLog.count({ where: dateFilter }),
-        prisma.requestLog.count({ where: { ...dateFilter, isAiRequest: true } }),
-        prisma.aiRequest.aggregate({
-          where: dateFilter,
-          _sum: {
-            promptTokens: true,
-            completionTokens: true,
-            totalTokens: true,
-            totalCostMicros: true,
-          },
-          _avg: {
-            totalDuration: true,
-            timeToFirstToken: true,
-          },
-        }),
-        prisma.requestLog.count({
-          where: {
-            ...dateFilter,
-            statusCode: { gte: 400 },
-          },
-        }),
-        prisma.requestLog.groupBy({
-          by: ['method'],
-          where: dateFilter,
-          _count: true,
-        }),
-      ]);
-
-      // AI usage by provider
-      const usageByProvider = await prisma.aiRequest.groupBy({
-        by: ['provider'],
-        where: dateFilter,
-        _sum: {
-          totalTokens: true,
-          totalCostMicros: true,
-        },
-        _count: true,
-      });
-
-      // AI usage by model
-      const usageByModel = await prisma.aiRequest.groupBy({
-        by: ['model'],
-        where: dateFilter,
-        _sum: {
-          totalTokens: true,
-          totalCostMicros: true,
-        },
-        _count: true,
-        orderBy: {
-          _sum: {
-            totalCostMicros: 'desc',
-          },
-        },
-        take: 10,
-      });
-
-      // OpenRouter-specific stats - using raw query for new fields
-      const openrouterStats = await prisma.$queryRaw<Array<{
-        count: number;
-        totalCost: number | null;
-        cacheDiscount: number | null;
-        reasoningTokens: number | null;
-        cachedTokens: number | null;
-      }>>`
-        SELECT
-          COUNT(*) as count,
-          SUM(openrouterTotalCost) as totalCost,
-          SUM(openrouterCacheDiscount) as cacheDiscount,
-          SUM(openrouterNativeTokensReasoning) as reasoningTokens,
-          SUM(openrouterNativeTokensCached) as cachedTokens
-        FROM AiRequest
-        WHERE provider = 'openrouter' AND openrouterEnriched = 1
-      `;
-
-      // OpenRouter usage by actual provider
-      const openrouterByProvider = await prisma.$queryRaw<Array<{
-        provider: string;
-        count: number;
-        totalTokens: number | null;
-        totalCost: number | null;
-      }>>`
-        SELECT
-          openrouterProviderName as provider,
-          COUNT(*) as count,
-          SUM(totalTokens) as totalTokens,
-          SUM(openrouterTotalCost) as totalCost
-        FROM AiRequest
-        WHERE provider = 'openrouter' AND openrouterEnriched = 1 AND openrouterProviderName IS NOT NULL
-        GROUP BY openrouterProviderName
-        ORDER BY count DESC
-        LIMIT 10
-      `;
-
-      res.json({
-        totalRequests,
-        totalAiRequests,
-        totalErrors: recentErrors,
-        requestsByMethod: requestsByMethod.reduce(
-          (acc, m) => ({ ...acc, [m.method]: m._count }),
-          {}
-        ),
-        ai: {
-          totalPromptTokens: aiStats._sum.promptTokens || 0,
-          totalCompletionTokens: aiStats._sum.completionTokens || 0,
-          totalTokens: aiStats._sum.totalTokens || 0,
-          totalCostMicros: aiStats._sum.totalCostMicros || 0,
-          totalCostUsd: (aiStats._sum.totalCostMicros || 0) / 1_000_000,
-          avgDurationMs: Math.round(aiStats._avg.totalDuration || 0),
-          avgTimeToFirstTokenMs: Math.round(aiStats._avg.timeToFirstToken || 0),
-          byProvider: usageByProvider.map((p) => ({
-            provider: p.provider,
-            count: p._count,
-            totalTokens: p._sum.totalTokens || 0,
-            totalCostMicros: p._sum.totalCostMicros || 0,
-          })),
-          byModel: usageByModel.map((m) => ({
-            model: m.model || 'unknown',
-            count: m._count,
-            totalTokens: m._sum.totalTokens || 0,
-            totalCostMicros: m._sum.totalCostMicros || 0,
-          })),
-        },
-        openrouter: {
-          enrichedCount: Number(openrouterStats[0]?.count ?? 0),
-          totalCostUsd: openrouterStats[0]?.totalCost ?? 0,
-          totalCacheDiscountUsd: openrouterStats[0]?.cacheDiscount ?? 0,
-          totalReasoningTokens: Number(openrouterStats[0]?.reasoningTokens ?? 0),
-          totalCachedTokens: Number(openrouterStats[0]?.cachedTokens ?? 0),
-          byActualProvider: openrouterByProvider.map((p) => ({
-            provider: p.provider,
-            count: Number(p.count),
-            totalTokens: Number(p.totalTokens ?? 0),
-            totalCostUsd: p.totalCost ?? 0,
-          })),
-        },
-      });
+      const range = resolveRange(req.query.from as string, req.query.to as string);
+      const summary = await getSummary(range);
+      res.json(summary);
     } catch (error) {
-      console.error('Error fetching stats:', error);
+      console.error('Error fetching stats summary:', error);
       res.status(500).json({ error: 'Failed to fetch stats' });
+    }
+  });
+
+  app.get('/api/stats/timeseries', async (req, res) => {
+    try {
+      const range = resolveRange(req.query.from as string, req.query.to as string);
+      const rawBucket = (req.query.bucket as string) || 'day';
+      const bucket: Bucket = rawBucket === 'hour' ? 'hour' : 'day';
+      const points = await getTimeseries(range, bucket);
+      res.json({ bucket, points, range: { from: range.from.toISOString(), to: range.to.toISOString() } });
+    } catch (error) {
+      console.error('Error fetching timeseries:', error);
+      res.status(500).json({ error: 'Failed to fetch timeseries' });
+    }
+  });
+
+  app.get('/api/stats/top-prompts', async (req, res) => {
+    try {
+      const range = resolveRange(req.query.from as string, req.query.to as string);
+      const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
+      const prompts = await getTopPrompts(range, limit);
+      res.json({ prompts });
+    } catch (error) {
+      console.error('Error fetching top prompts:', error);
+      res.status(500).json({ error: 'Failed to fetch top prompts' });
+    }
+  });
+
+  app.get('/api/stats/latency', async (req, res) => {
+    try {
+      const range = resolveRange(req.query.from as string, req.query.to as string);
+      const heavyLimit = Math.min(parseInt(req.query.heavyLimit as string) || 10, 50);
+      const data = await getLatency(range, heavyLimit);
+      res.json(data);
+    } catch (error) {
+      console.error('Error fetching latency stats:', error);
+      res.status(500).json({ error: 'Failed to fetch latency stats' });
+    }
+  });
+
+  app.get('/api/stats/openrouter', async (req, res) => {
+    try {
+      const range = resolveRange(req.query.from as string, req.query.to as string);
+      const data = await getOpenRouterStats(range);
+      res.json(data);
+    } catch (error) {
+      console.error('Error fetching openrouter stats:', error);
+      res.status(500).json({ error: 'Failed to fetch openrouter stats' });
     }
   });
 

@@ -97,6 +97,7 @@ interface RequestLog {
     provider: string;
     model: string | null;
     isStreaming: boolean;
+    kind?: string | null;
     promptTokens: number | null;
     completionTokens: number | null;
     totalTokens: number | null;
@@ -111,6 +112,8 @@ interface RequestLog {
     hasToolCalls: boolean;
     toolCallCount: number | null;
     toolNames: string | null;
+    embeddingInputCount?: number | null;
+    embeddingDimensions?: number | null;
   } | null;
 }
 
@@ -459,8 +462,13 @@ export function RequestDetailPanel({ requestId }: Props) {
                 </div>
               )}
 
+              {/* Embedding-specific view */}
+              {ai.kind === 'embedding' && (
+                <EmbeddingView ai={ai} />
+              )}
+
               {/* Conversation */}
-              {messages.length > 0 && (
+              {ai.kind !== 'embedding' && messages.length > 0 && (
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <h4 className="text-xs font-medium text-gray-500 uppercase">Conversation</h4>
@@ -627,6 +635,77 @@ function MessageBubble({ msg, colors }: MessageBubbleProps) {
   return (
     <div className={`${bubbleCls} whitespace-pre-wrap`}>
       {content || <span className="text-gray-500 italic">(no content)</span>}
+    </div>
+  );
+}
+
+/**
+ * Renderer for embedding requests. Shows the input texts (preview from the
+ * request body) and the vector summary (count + dimensionality) instead of a
+ * conversation, since embeddings have no chat-style messages.
+ */
+function EmbeddingView({ ai }: { ai: NonNullable<RequestLog['aiRequest']> }) {
+  let inputs: string[] = [];
+  let inputCount = ai.embeddingInputCount ?? 0;
+  try {
+    if (ai.fullRequest) {
+      const fr = JSON.parse(ai.fullRequest);
+      const raw = fr?.input;
+      if (typeof raw === 'string') {
+        inputs = [raw];
+        inputCount = inputCount || 1;
+      } else if (Array.isArray(raw)) {
+        inputs = raw.slice(0, 50).map((v: unknown) => (typeof v === 'string' ? v : JSON.stringify(v)));
+        inputCount = inputCount || raw.length;
+      }
+    }
+  } catch { /* ignore */ }
+
+  return (
+    <div className="space-y-3">
+      <div className="bg-[#1c2333] border border-[#30363d] rounded-lg p-3 flex flex-wrap gap-x-6 gap-y-2 text-xs">
+        <div>
+          <span className="text-gray-500">Inputs:</span>
+          <span className="ml-1 text-gray-200 font-mono">{inputCount.toLocaleString()}</span>
+        </div>
+        <div>
+          <span className="text-gray-500">Dimensions:</span>
+          <span className="ml-1 text-gray-200 font-mono">{ai.embeddingDimensions ?? '–'}</span>
+        </div>
+        <div>
+          <span className="text-gray-500">Prompt tokens:</span>
+          <span className="ml-1 text-gray-200 font-mono">{ai.promptTokens?.toLocaleString() ?? '–'}</span>
+        </div>
+        <div>
+          <span className="text-gray-500">Avg tokens/input:</span>
+          <span className="ml-1 text-gray-200 font-mono">
+            {ai.promptTokens && inputCount > 0 ? Math.round(ai.promptTokens / inputCount) : '–'}
+          </span>
+        </div>
+      </div>
+
+      {inputs.length > 0 && (
+        <div>
+          <h4 className="text-xs font-medium text-gray-500 uppercase mb-2">
+            Input texts {inputCount > inputs.length && <span className="ml-1 text-gray-600">({inputs.length} of {inputCount} shown)</span>}
+          </h4>
+          <div className="space-y-1.5">
+            {inputs.map((text, i) => (
+              <div key={i} className="bg-[#0d1117] border border-[#30363d] rounded p-2 text-xs">
+                <div className="flex items-start gap-2">
+                  <span className="text-gray-600 font-mono w-6 text-right shrink-0">{i + 1}.</span>
+                  <span className="text-gray-300 whitespace-pre-wrap break-words font-mono flex-1">{text}</span>
+                  <span className="text-gray-600 text-[10px] shrink-0">{text.length} chars</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="text-xs text-gray-500 italic">
+        Embedding vectors are not stored in the DB (would be ~{(ai.embeddingDimensions ?? 0) * 4} bytes × {inputCount} inputs). Use the upstream API directly to retrieve them.
+      </div>
     </div>
   );
 }

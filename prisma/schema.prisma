@@ -59,6 +59,13 @@ model AiRequest {
   endpoint        String   // z.B. "/v1/chat/completions"
   model           String?
   isStreaming     Boolean  @default(false)
+  // High-level kind of AI call (drives how the UI renders the body).
+  // Currently: "chat" (default, also for completions) | "embedding" | "audio" | "image" | "moderation"
+  kind            String   @default("chat")
+  // For embedding requests: stored summary so the UI can show "3 inputs, 1536-dim"
+  // without ever loading the (potentially MB-sized) vector arrays.
+  embeddingInputCount Int?
+  embeddingDimensions Int?
 
   // Messages (vereinfacht für Übersicht - Legacy)
   systemPrompt    String?
@@ -124,6 +131,7 @@ model AiRequest {
   @@index([createdAt])
   @@index([openrouterGenerationId])
   @@index([systemPromptHash])
+  @@index([kind])
 }
 
 model RoutingRule {
