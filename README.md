@@ -1,5 +1,3 @@
-# Request Interceptor
-
 ![Request Interceptor hero](docs/readme-assets/hero.svg)
 
 **A self-hosted drop-in proxy for watching HTTP traffic as it happens - built especially for AI APIs, streaming responses, multimodal payloads, workflow builders, and webhook-heavy systems.**
