@@ -7,6 +7,7 @@ import RequestDetail from './pages/RequestDetail';
 import RoutingRules from './pages/RoutingRules';
 import Settings from './pages/Settings';
 import { LoginScreen } from './components/LoginScreen';
+import { apiFetch } from './utils/apiFetch';
 
 type AuthState =
   | { status: 'loading' }
@@ -20,7 +21,7 @@ function App() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
+        const res = await apiFetch('/api/auth/me', { credentials: 'same-origin' });
         if (cancelled) return;
         if (res.ok) {
           const data = await res.json();
@@ -122,7 +123,7 @@ function NavItem({ to, label, activeClasses }: { to: string; label: string; acti
 function UserMenu({ auth }: { auth: Extract<AuthState, { status: 'authed' }> }) {
   const handleLogout = async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+      await apiFetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
     } catch {}
     window.location.href = '/';
   };

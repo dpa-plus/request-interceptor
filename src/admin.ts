@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { prisma } from './lib/prisma.js';
@@ -1251,8 +1252,11 @@ export function createAdminApp() {
     }
   });
 
-  // Serve static frontend files
-  const publicPath = path.join(__dirname, 'public');
+  // Serve static frontend files. In production __dirname is dist/, while tsx
+  // dev runs from src/ and needs to point at the Vite build output.
+  const publicPath = fs.existsSync(path.join(__dirname, 'public', 'index.html'))
+    ? path.join(__dirname, 'public')
+    : path.join(__dirname, '..', 'dist', 'public');
   app.use(express.static(publicPath));
 
   // SPA fallback

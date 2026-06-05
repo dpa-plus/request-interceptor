@@ -4,6 +4,7 @@ import { HeadersTable } from './HeadersTable';
 import { CopyButton, InlineCopyButton } from './CopyButton';
 import { generateCurl } from '../utils/curlGenerator';
 import { ContentPartsRenderer, ContentPart } from './ContentPartsRenderer';
+import { apiFetch } from '../utils/apiFetch';
 
 // Unified message shape as stored by src/lib/aiDetector.ts (camelCase)
 interface ToolCall {
@@ -185,7 +186,7 @@ export function RequestDetailPanel({ requestId }: Props) {
     const fetchLog = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`/api/logs/${requestId}`);
+        const response = await apiFetch(`/api/logs/${requestId}`);
         if (!response.ok) throw new Error('Failed to load');
         const data = await response.json();
         if (!cancelled) {

@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useSocket, RequestStartEvent, RequestCompleteEvent } from '../hooks/useSocket';
 import { RequestDetailPanel } from '../components/RequestDetailPanel';
 import { colorForHash, labelForHash } from '../utils/promptColor';
+import { apiFetch } from '../utils/apiFetch';
 
 interface AiRequestSummary {
   id: string;
@@ -385,11 +386,11 @@ function Dashboard() {
 
       // Fetch filtered logs + pinned logs in parallel
       const pinnedArray = [...pinnedIds];
-      const fetches: Promise<Response>[] = [fetch(`/api/logs?${params}`)];
+      const fetches: Promise<Response>[] = [apiFetch(`/api/logs?${params}`)];
 
       // Fetch each pinned request individually (so they survive filters)
       const pinnedFetches = pinnedArray.map(id =>
-        fetch(`/api/logs/${id}`).then(r => r.ok ? r.json() : null).catch(() => null)
+        apiFetch(`/api/logs/${id}`).then(r => r.ok ? r.json() : null).catch(() => null)
       );
 
       const [response, ...pinnedResults] = await Promise.all([fetches[0], ...pinnedFetches]);
@@ -426,7 +427,7 @@ function Dashboard() {
       if (filter === 'regular') params.set('isAiRequest', 'false');
       if (methodFilter) params.set('method', methodFilter);
 
-      const response = await fetch(`/api/logs?${params}`);
+      const response = await apiFetch(`/api/logs?${params}`);
       if (!response.ok) throw new Error('Failed to fetch more logs');
       const data: LogsResponse = await response.json();
 
@@ -476,7 +477,7 @@ function Dashboard() {
 
   const clearLogs = async () => {
     try {
-      await fetch('/api/logs', { method: 'DELETE' });
+      await apiFetch('/api/logs', { method: 'DELETE' });
       toast.success('All logs cleared');
       setDeleteConfirm(false);
       fetchLogs();
@@ -807,9 +808,13 @@ function Dashboard() {
         <div className="flex-1 overflow-auto">
           <div className="divide-y divide-[#21262d]">
             {filteredLogs.length === 0 && !loading && (
-              <div className="p-6 text-center text-gray-500 text-sm">
-                {logs.length === 0 ? 'No requests logged yet' : 'No requests match your filters'}
-              </div>
+              logs.length === 0 ? (
+                <DashboardEmptyState />
+              ) : (
+                <div className="p-6 text-center text-gray-500 text-sm">
+                  No requests match your filters
+                </div>
+              )
             )}
             {filteredLogs.map((log) => {
               const groupColor = logGroupColors.get(log.id);
@@ -1000,6 +1005,72 @@ function PromptChip({
       <span className={`w-1.5 h-1.5 rounded-full ${color.dot}`} />
       <span>{label}</span>
     </button>
+  );
+}
+
+function DashboardEmptyState() {
+  return (
+    <div className="px-4 py-8">
+      <div className="mx-auto max-w-2xl rounded-lg border border-[#30363d] bg-[#161b22] overflow-hidden">
+        <div className="border-b border-[#21262d] px-5 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-[#1f6feb22] text-[#58a6ff]">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7h16M4 12h10M4 17h6" />
+              </svg>
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-gray-100">Start capturing requests</h2>
+              <p className="mt-0.5 text-xs text-gray-500">Point a client at the proxy, then open each request here as a tab.</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-0 divide-y divide-[#21262d] md:grid-cols-3 md:divide-x md:divide-y-0">
+          <div className="p-4">
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">1. Proxy URL</div>
+            <code className="block rounded bg-[#0d1117] px-2.5 py-2 text-xs text-gray-300">
+              http://localhost:3001
+            </code>
+          </div>
+          <div className="p-4">
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">2. Target</div>
+            <code className="block rounded bg-[#0d1117] px-2.5 py-2 text-xs text-gray-300">
+              ?__target=https://api.openai.com
+            </code>
+          </div>
+          <div className="p-4">
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">3. Inspect</div>
+            <div className="rounded bg-[#0d1117] px-2.5 py-2 text-xs text-gray-300">
+              Live rows, AI parsing, cURL replay
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 px-5 py-4">
+          <Link
+            to="/routing"
+            className="inline-flex items-center gap-2 rounded-md bg-[#1f6feb] px-3 py-2 text-xs font-semibold text-white hover:bg-[#1a5fd4]"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5-5 5M6 12h12" />
+            </svg>
+            Configure routing
+          </Link>
+          <Link
+            to="/settings"
+            className="inline-flex items-center gap-2 rounded-md border border-[#30363d] bg-[#0d1117] px-3 py-2 text-xs font-semibold text-gray-300 hover:bg-[#1c2333]"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317a1.724 1.724 0 013.35 0 1.724 1.724 0 002.573 1.066 1.724 1.724 0 012.37 2.37 1.724 1.724 0 001.065 2.572 1.724 1.724 0 010 3.35 1.724 1.724 0 00-1.066 2.573 1.724 1.724 0 01-2.37 2.37 1.724 1.724 0 00-2.572 1.065 1.724 1.724 0 01-3.35 0 1.724 1.724 0 00-2.573-1.066 1.724 1.724 0 01-2.37-2.37 1.724 1.724 0 00-1.065-2.572 1.724 1.724 0 010-3.35 1.724 1.724 0 001.066-2.573 1.724 1.724 0 012.37-2.37 1.724 1.724 0 002.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            Open settings
+          </Link>
+          <span className="text-xs text-gray-500">Default credentials: admin / changeme</span>
+        </div>
+      </div>
+    </div>
   );
 }
 

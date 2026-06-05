@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { StatCard } from '../components/StatCard';
 import { LineChart } from '../components/LineChart';
 import { colorForHash, labelForHash } from '../utils/promptColor';
+import { apiFetch } from '../utils/apiFetch';
 
 interface Summary {
   totalRequests: number;
@@ -130,11 +131,11 @@ function AiDashboard() {
   const fetchData = useCallback(async () => {
     try {
       const [summaryR, tsR, promptsR, latR, orR] = await Promise.all([
-        fetch(`/api/stats${queryString}`),
-        fetch(`/api/stats/timeseries${queryString}&bucket=${bucket}`),
-        fetch(`/api/stats/top-prompts${queryString}&limit=8`),
-        fetch(`/api/stats/latency${queryString}&heavyLimit=10`),
-        fetch(`/api/stats/openrouter${queryString}`),
+        apiFetch(`/api/stats${queryString}`),
+        apiFetch(`/api/stats/timeseries${queryString}&bucket=${bucket}`),
+        apiFetch(`/api/stats/top-prompts${queryString}&limit=8`),
+        apiFetch(`/api/stats/latency${queryString}&heavyLimit=10`),
+        apiFetch(`/api/stats/openrouter${queryString}`),
       ]);
       if (!summaryR.ok || !tsR.ok || !promptsR.ok || !latR.ok || !orR.ok) {
         throw new Error('Failed to fetch stats');

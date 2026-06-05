@@ -5,6 +5,7 @@ import { CopyButton } from '../components/CopyButton';
 import { SmartBodyViewer } from '../components/SmartBodyViewer';
 import { HeadersTable } from '../components/HeadersTable';
 import { generateCurl } from '../utils/curlGenerator';
+import { apiFetch } from '../utils/apiFetch';
 
 // Tool call structure
 interface ToolCall {
@@ -137,7 +138,7 @@ function RequestDetail() {
     const fetchLog = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`/api/logs/${id}`);
+        const response = await apiFetch(`/api/logs/${id}`);
         if (!response.ok) {
           if (response.status === 404) {
             throw new Error('Request not found');

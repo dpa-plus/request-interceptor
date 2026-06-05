@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { apiFetch } from '../utils/apiFetch';
 
 interface Config {
   id: string;
@@ -17,9 +19,15 @@ interface AiPricing {
   outputPricePerMillion: number;
 }
 
+interface RoutingRuleSummary {
+  id: string;
+  enabled: boolean;
+}
+
 function Settings() {
   const [config, setConfig] = useState<Config | null>(null);
   const [pricing, setPricing] = useState<AiPricing[]>([]);
+  const [routingRules, setRoutingRules] = useState<RoutingRuleSummary[]>([]);
   const [defaultTargetUrl, setDefaultTargetUrl] = useState('');
   const [logEnabled, setLogEnabled] = useState(true);
   const [maxBodySize, setMaxBodySize] = useState(1048576);
@@ -36,18 +44,21 @@ function Settings() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [configRes, pricingRes] = await Promise.all([
-        fetch('/api/config'),
-        fetch('/api/pricing'),
+      const [configRes, pricingRes, routingRes] = await Promise.all([
+        apiFetch('/api/config'),
+        apiFetch('/api/pricing'),
+        apiFetch('/api/routing-rules'),
       ]);
 
       if (!configRes.ok) throw new Error('Failed to fetch config');
 
       const configData: Config = await configRes.json();
       const pricingData: AiPricing[] = await pricingRes.json();
+      const routingData: RoutingRuleSummary[] = routingRes.ok ? await routingRes.json() : [];
 
       setConfig(configData);
       setPricing(pricingData);
+      setRoutingRules(routingData);
       setDefaultTargetUrl(configData.defaultTargetUrl || '');
       setLogEnabled(configData.logEnabled);
       setMaxBodySize(configData.maxBodySize);
@@ -65,7 +76,7 @@ function Settings() {
     try {
       setSaving(true);
       setSuccess(false);
-      const response = await fetch('/api/config', {
+      const response = await apiFetch('/api/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -100,6 +111,8 @@ function Settings() {
     return `$${(micros / 1_000_000).toFixed(2)}`;
   };
 
+  const enabledRoutingRules = routingRules.filter((rule) => rule.enabled).length;
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -110,7 +123,30 @@ function Settings() {
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-4 overflow-auto h-[calc(100vh-44px)]">
-      <h1 className="text-2xl font-bold text-gray-100 mb-6">Settings</h1>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-100">Settings</h1>
+          <p className="mt-1 text-sm text-gray-500">Routing, capture limits, and AI parsing defaults.</p>
+        </div>
+        <Link
+          to="/routing"
+          className="inline-flex items-center gap-2 rounded-md border border-[#30363d] bg-[#161b22] px-3 py-2 text-sm font-medium text-gray-300 hover:bg-[#1c2333]"
+        >
+          <svg className="h-4 w-4 text-[#58a6ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5-5 5M6 12h12" />
+          </svg>
+          Routing rules
+        </Link>
+      </div>
+
+      <SetupOverview
+        defaultTargetUrl={defaultTargetUrl}
+        enabledRules={enabledRoutingRules}
+        totalRules={routingRules.length}
+        logEnabled={logEnabled}
+        aiDetectionEnabled={aiDetectionEnabled}
+        maxBodySize={formatBytes(maxBodySize)}
+      />
 
       {error && (
         <div className="mb-4 p-4 bg-red-900/40 border border-red-800 rounded-md text-red-400">
@@ -383,6 +419,100 @@ function Settings() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function SetupOverview({
+  defaultTargetUrl,
+  enabledRules,
+  totalRules,
+  logEnabled,
+  aiDetectionEnabled,
+  maxBodySize,
+}: {
+  defaultTargetUrl: string;
+  enabledRules: number;
+  totalRules: number;
+  logEnabled: boolean;
+  aiDetectionEnabled: boolean;
+  maxBodySize: string;
+}) {
+  return (
+    <section className="mb-6 grid gap-3 md:grid-cols-4">
+      <SetupCard
+        label="Default target"
+        value={defaultTargetUrl ? 'Configured' : 'Not set'}
+        detail={defaultTargetUrl || 'Rules or per-request targets required'}
+        tone={defaultTargetUrl ? 'green' : 'yellow'}
+      />
+      <SetupCard
+        label="Routing rules"
+        value={`${enabledRules}/${totalRules} active`}
+        detail={totalRules > 0 ? 'Priority order controls matching' : 'Add templates for common APIs'}
+        tone={enabledRules > 0 ? 'blue' : 'neutral'}
+        href="/routing"
+      />
+      <SetupCard
+        label="Logging"
+        value={logEnabled ? 'Enabled' : 'Paused'}
+        detail={`Body cap ${maxBodySize}`}
+        tone={logEnabled ? 'green' : 'red'}
+      />
+      <SetupCard
+        label="AI parsing"
+        value={aiDetectionEnabled ? 'Enabled' : 'Off'}
+        detail="OpenAI-compatible calls get decoded"
+        tone={aiDetectionEnabled ? 'purple' : 'neutral'}
+      />
+    </section>
+  );
+}
+
+function SetupCard({
+  label,
+  value,
+  detail,
+  tone,
+  href,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  tone: 'blue' | 'green' | 'purple' | 'yellow' | 'red' | 'neutral';
+  href?: string;
+}) {
+  const tones = {
+    blue: 'bg-[#1f6feb22] text-[#58a6ff] border-[#1f6feb55]',
+    green: 'bg-green-900/20 text-green-300 border-green-800/70',
+    purple: 'bg-purple-900/20 text-purple-300 border-purple-800/70',
+    yellow: 'bg-yellow-900/20 text-yellow-300 border-yellow-800/70',
+    red: 'bg-red-900/20 text-red-300 border-red-800/70',
+    neutral: 'bg-[#1c2333] text-gray-300 border-[#30363d]',
+  };
+
+  const content = (
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</span>
+        <span className={`h-2 w-2 rounded-full border ${tones[tone]}`} />
+      </div>
+      <div className="mt-3 text-base font-semibold text-gray-100">{value}</div>
+      <div className="mt-1 truncate text-xs text-gray-500" title={detail}>{detail}</div>
+    </>
+  );
+
+  if (href) {
+    return (
+      <Link to={href} className="rounded-lg border border-[#30363d] bg-[#161b22] p-4 hover:bg-[#1c2333]">
+        {content}
+      </Link>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-4">
+      {content}
     </div>
   );
 }

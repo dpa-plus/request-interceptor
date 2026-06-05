@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import toast from 'react-hot-toast';
+import { apiFetch } from '../utils/apiFetch';
 
 interface RoutingRule {
   id: string;
@@ -12,6 +13,10 @@ interface RoutingRule {
   targetUrl: string;
   createdAt: string;
   updatedAt: string;
+}
+
+interface Config {
+  defaultTargetUrl: string | null;
 }
 
 const MATCH_TYPES = [
@@ -75,6 +80,13 @@ const EXAMPLE_RULES = [
     targetUrl: 'https://openrouter.ai',
     description: 'Route /api/v1/* to OpenRouter',
   },
+  {
+    name: 'Local API',
+    matchType: 'path_prefix',
+    matchPattern: '/api/',
+    targetUrl: 'http://host.docker.internal:8080',
+    description: 'Route /api/* to a local service from Docker',
+  },
 ];
 
 function RoutingRules() {
@@ -86,14 +98,19 @@ function RoutingRules() {
   const [showExamples, setShowExamples] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [testPath, setTestPath] = useState('');
+  const [config, setConfig] = useState<Config | null>(null);
 
   const fetchRules = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/routing-rules');
-      if (!response.ok) throw new Error('Failed to fetch routing rules');
-      const data = await response.json();
+      const [rulesResponse, configResponse] = await Promise.all([
+        apiFetch('/api/routing-rules'),
+        apiFetch('/api/config'),
+      ]);
+      if (!rulesResponse.ok) throw new Error('Failed to fetch routing rules');
+      const data = await rulesResponse.json();
       setRules(data);
+      setConfig(configResponse.ok ? await configResponse.json() : null);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
@@ -132,7 +149,7 @@ function RoutingRules() {
       const url = isNew ? '/api/routing-rules' : `/api/routing-rules/${editingRule.id}`;
       const method = isNew ? 'POST' : 'PUT';
 
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editingRule),
@@ -155,7 +172,7 @@ function RoutingRules() {
 
   const deleteRule = async (id: string) => {
     try {
-      const response = await fetch(`/api/routing-rules/${id}`, { method: 'DELETE' });
+      const response = await apiFetch(`/api/routing-rules/${id}`, { method: 'DELETE' });
       if (!response.ok) throw new Error('Failed to delete rule');
       toast.success('Rule deleted');
       setDeleteConfirm(null);
@@ -167,7 +184,7 @@ function RoutingRules() {
 
   const toggleEnabled = async (rule: RoutingRule) => {
     try {
-      await fetch(`/api/routing-rules/${rule.id}`, {
+      await apiFetch(`/api/routing-rules/${rule.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: !rule.enabled }),
@@ -182,7 +199,7 @@ function RoutingRules() {
   const movePriority = async (rule: RoutingRule, direction: 'up' | 'down') => {
     const newPriority = direction === 'up' ? rule.priority + 10 : rule.priority - 10;
     try {
-      await fetch(`/api/routing-rules/${rule.id}`, {
+      await apiFetch(`/api/routing-rules/${rule.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ priority: newPriority }),
@@ -208,6 +225,7 @@ function RoutingRules() {
   };
 
   const matchTypeConfig = MATCH_TYPES.find((t) => t.value === editingRule?.matchType);
+  const enabledRules = rules.filter((rule) => rule.enabled).length;
 
   if (loading && rules.length === 0) {
     return (
@@ -284,32 +302,29 @@ function RoutingRules() {
         </div>
       )}
 
-      {/* Routing Priority Info */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg mb-6 p-4">
-        <h2 className="text-sm font-medium text-blue-900 mb-2 flex items-center gap-2">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          How Routing Works
-        </h2>
-        <ol className="text-sm text-blue-800 space-y-1">
-          <li className="flex items-center gap-2">
-            <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-200 text-blue-800 text-xs flex items-center justify-center font-bold">1</span>
-            <code className="bg-blue-100 px-1 rounded">__target</code> query parameter (highest priority)
-          </li>
-          <li className="flex items-center gap-2">
-            <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-200 text-blue-800 text-xs flex items-center justify-center font-bold">2</span>
-            <code className="bg-blue-100 px-1 rounded">X-Target-URL</code> header
-          </li>
-          <li className="flex items-center gap-2">
-            <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-200 text-blue-800 text-xs flex items-center justify-center font-bold">3</span>
-            Routing rules (by priority, highest number first)
-          </li>
-          <li className="flex items-center gap-2">
-            <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-200 text-blue-800 text-xs flex items-center justify-center font-bold">4</span>
-            Default target URL from settings
-          </li>
-        </ol>
+      <div className="mb-6 rounded-lg border border-[#30363d] bg-[#161b22] overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#21262d] px-4 py-3">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-100">Routing priority</h2>
+            <p className="mt-0.5 text-xs text-gray-500">The first matching target wins, then the proxy forwards unchanged.</p>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="rounded-full bg-[#1f6feb22] px-2 py-1 font-medium text-[#58a6ff]">
+              {enabledRules}/{rules.length} rules active
+            </span>
+            <span className={`rounded-full px-2 py-1 font-medium ${
+              config?.defaultTargetUrl ? 'bg-green-900/30 text-green-300' : 'bg-yellow-900/30 text-yellow-300'
+            }`}>
+              {config?.defaultTargetUrl ? 'Default set' : 'No default'}
+            </span>
+          </div>
+        </div>
+        <div className="grid divide-y divide-[#21262d] md:grid-cols-4 md:divide-x md:divide-y-0">
+          <RoutingStep index="1" label="Query" value="__target" detail="Per-request override" active />
+          <RoutingStep index="2" label="Header" value="X-Target-URL" detail="Client-controlled override" active />
+          <RoutingStep index="3" label="Rules" value={`${enabledRules} active`} detail="Highest priority first" active={enabledRules > 0} />
+          <RoutingStep index="4" label="Fallback" value={config?.defaultTargetUrl || 'Not configured'} detail="Default target URL" active={Boolean(config?.defaultTargetUrl)} />
+        </div>
       </div>
 
       {/* Rules List */}
@@ -669,6 +684,35 @@ function RoutingRules() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function RoutingStep({
+  index,
+  label,
+  value,
+  detail,
+  active,
+}: {
+  index: string;
+  label: string;
+  value: string;
+  detail: string;
+  active: boolean;
+}) {
+  return (
+    <div className="p-4">
+      <div className="flex items-center gap-2">
+        <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
+          active ? 'bg-[#1f6feb33] text-[#58a6ff]' : 'bg-[#21262d] text-gray-500'
+        }`}>
+          {index}
+        </span>
+        <span className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</span>
+      </div>
+      <div className="mt-3 truncate font-mono text-sm text-gray-200" title={value}>{value}</div>
+      <div className="mt-1 text-xs text-gray-500">{detail}</div>
     </div>
   );
 }
