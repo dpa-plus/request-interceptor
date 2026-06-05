@@ -343,7 +343,14 @@ export interface OpenRouterStats {
   totalCachedTokens: number;
   totalPromptTokens: number;
   cachedPromptRatio: number;           // cached / prompt
-  byActualProvider: Array<{ provider: string; count: number; totalTokens: number; totalCostUsd: number }>;
+  byActualProvider: Array<{
+    provider: string;
+    count: number;
+    totalTokens: number;
+    totalCostUsd: number;
+    errorCount: number;
+    avgLatencyMs: number;
+  }>;
 }
 
 export async function getOpenRouterStats(range: StatsRange): Promise<OpenRouterStats> {
@@ -375,16 +382,21 @@ export async function getOpenRouterStats(range: StatsRange): Promise<OpenRouterS
         count: number;
         totalTokens: number | null;
         totalCost: number | null;
+        errorCount: number | null;
+        avgLatency: number | null;
       }>>(
-        `SELECT openrouterProviderName as provider,
+        `SELECT a.openrouterProviderName as provider,
                 COUNT(*) as count,
-                SUM(totalTokens) as totalTokens,
-                SUM(openrouterTotalCost) as totalCost
-           FROM AiRequest
-          WHERE provider = 'openrouter' AND openrouterEnriched = 1
-            AND openrouterProviderName IS NOT NULL
-            AND createdAt >= ? AND createdAt <= ?
-          GROUP BY openrouterProviderName
+                SUM(a.totalTokens) as totalTokens,
+                SUM(a.openrouterTotalCost) as totalCost,
+                SUM(CASE WHEN r.statusCode >= 400 THEN 1 ELSE 0 END) as errorCount,
+                AVG(a.openrouterLatency) as avgLatency
+           FROM AiRequest a
+           LEFT JOIN RequestLog r ON r.aiRequestId = a.id
+          WHERE a.provider = 'openrouter' AND a.openrouterEnriched = 1
+            AND a.openrouterProviderName IS NOT NULL
+            AND a.createdAt >= ? AND a.createdAt <= ?
+          GROUP BY a.openrouterProviderName
           ORDER BY count DESC
           LIMIT 10`,
         range.from, range.to
@@ -415,6 +427,8 @@ export async function getOpenRouterStats(range: StatsRange): Promise<OpenRouterS
         count: Number(p.count),
         totalTokens: Number(p.totalTokens || 0),
         totalCostUsd: Number(p.totalCost || 0),
+        errorCount: Number(p.errorCount || 0),
+        avgLatencyMs: Math.round(Number(p.avgLatency || 0)),
       })),
     };
   });

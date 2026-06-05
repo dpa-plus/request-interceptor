@@ -1,0 +1,71 @@
+<svg width="1200" height="300" viewBox="0 0 1200 300" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">AI observability banner</title>
+  <desc id="desc">A compact dark banner showing streaming AI signals turning into cost, token, latency, and tool-call insights.</desc>
+  <defs>
+    <linearGradient id="aiBg" x1="0" y1="0" x2="1200" y2="300" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#070A10"/>
+      <stop offset="0.52" stop-color="#0D1117"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+    <radialGradient id="aiGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(660 100) rotate(112) scale(520 320)">
+      <stop stop-color="#A371F7" stop-opacity="0.32"/>
+      <stop offset="0.48" stop-color="#58A6FF" stop-opacity="0.13"/>
+      <stop offset="1" stop-color="#0D1117" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="aiBeam" x1="92" y1="170" x2="1110" y2="170" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#58A6FF"/>
+      <stop offset="0.34" stop-color="#A371F7"/>
+      <stop offset="0.68" stop-color="#FF6100"/>
+      <stop offset="1" stop-color="#3FB950"/>
+    </linearGradient>
+    <filter id="aiShadow" x="-16%" y="-25%" width="132%" height="150%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#000" flood-opacity="0.45"/>
+    </filter>
+    <filter id="aiBlur" x="-50%" y="-50%" width="200%" height="200%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="12"/>
+    </filter>
+    <clipPath id="aiClip">
+      <rect width="1200" height="300" rx="28"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#aiClip)">
+    <rect width="1200" height="300" fill="url(#aiBg)"/>
+    <rect width="1200" height="300" fill="url(#aiGlow)"/>
+    <path d="M0 258C142 212 250 238 410 210C574 181 668 80 828 94C965 106 1058 168 1200 132" stroke="#58A6FF" stroke-opacity="0.15" stroke-width="2"/>
+    <text x="56" y="70" fill="#F0F6FC" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="34" font-weight="850">Streaming AI traces</text>
+    <text x="58" y="100" fill="#9BA7B4" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="16">tokens, tools, cost, latency</text>
+
+    <path d="M92 170C224 128 344 160 464 170C570 179 650 166 774 130C910 90 1006 124 1110 116" stroke="url(#aiBeam)" stroke-width="7" stroke-linecap="round"/>
+    <path d="M92 198C252 160 360 214 520 194C650 178 784 180 1110 206" stroke="url(#aiBeam)" stroke-width="3" stroke-linecap="round" stroke-opacity="0.42"/>
+
+    <g filter="url(#aiShadow)">
+      <rect x="384" y="88" width="246" height="150" rx="22" fill="#121923" stroke="#30363D"/>
+      <circle cx="430" cy="132" r="18" fill="#1F6FEB" fill-opacity="0.25" stroke="#58A6FF"/>
+      <path d="M464 128H566" stroke="#F0F6FC" stroke-width="9" stroke-linecap="round" opacity="0.78"/>
+      <path d="M464 154H542" stroke="#8B949E" stroke-width="7" stroke-linecap="round" opacity="0.7"/>
+      <path d="M426 194H476M496 194H552M572 194H600" stroke="#A371F7" stroke-width="8" stroke-linecap="round"/>
+    </g>
+
+    <g filter="url(#aiShadow)">
+      <rect x="690" y="66" width="372" height="190" rx="24" fill="#101620" stroke="#30363D"/>
+      <g transform="translate(724 98)">
+        <rect width="86" height="56" rx="14" fill="#1F6FEB" fill-opacity="0.16" stroke="#58A6FF" stroke-opacity="0.55"/>
+        <path d="M22 22H62M22 36H48" stroke="#9ECBFF" stroke-width="6" stroke-linecap="round"/>
+        <rect x="106" width="86" height="56" rx="14" fill="#238636" fill-opacity="0.16" stroke="#3FB950" stroke-opacity="0.5"/>
+        <path d="M128 36C140 20 150 46 170 18" stroke="#7EE787" stroke-width="6" stroke-linecap="round"/>
+        <rect x="212" width="86" height="56" rx="14" fill="#D29922" fill-opacity="0.14" stroke="#D29922" stroke-opacity="0.55"/>
+        <path d="M234 36H276M234 22H262" stroke="#E3B341" stroke-width="6" stroke-linecap="round"/>
+      </g>
+      <g transform="translate(724 182)">
+        <path d="M0 0H88" stroke="#58A6FF" stroke-width="8" stroke-linecap="round"/>
+        <path d="M112 0H206" stroke="#A371F7" stroke-width="8" stroke-linecap="round"/>
+        <path d="M230 0H308" stroke="#3FB950" stroke-width="8" stroke-linecap="round"/>
+      </g>
+    </g>
+
+    <circle cx="334" cy="167" r="14" fill="#58A6FF" opacity="0.85" filter="url(#aiBlur)"/>
+    <circle cx="652" cy="156" r="18" fill="#A371F7" opacity="0.75" filter="url(#aiBlur)"/>
+    <circle cx="1088" cy="116" r="16" fill="#3FB950" opacity="0.7" filter="url(#aiBlur)"/>
+  </g>
+</svg>

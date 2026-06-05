@@ -174,6 +174,7 @@ export function createProxyApp() {
       const maxBodySize = config?.maxBodySize ?? 1048576;
       const logEnabled = config?.logEnabled ?? true;
       const aiDetectionEnabled = config?.aiDetectionEnabled ?? true;
+      const credentialRetentionDays = (config as any)?.credentialRetentionDays;
 
       // Resolve target
       const targetResult = await resolveTarget(req);
@@ -188,7 +189,7 @@ export function createProxyApp() {
               url: req.originalUrl,
               path: req.path,
               queryParams: safeJsonStringify(req.query),
-              headers: safeJsonStringify(redactHeadersForStorage(req.headers as Record<string, unknown>)),
+              headers: safeJsonStringify(redactHeadersForStorage(req.headers as Record<string, unknown>, credentialRetentionDays)),
               body,
               bodyTruncated: truncated,
               bodySize: size,
@@ -252,7 +253,7 @@ export function createProxyApp() {
             url: req.originalUrl,
             path: req.path,
             queryParams: safeJsonStringify(cleanQuery),
-            headers: safeJsonStringify(redactHeadersForStorage(req.headers as Record<string, unknown>)),
+            headers: safeJsonStringify(redactHeadersForStorage(req.headers as Record<string, unknown>, credentialRetentionDays)),
             body: logBody,
             bodyTruncated,
             bodySize,
@@ -319,7 +320,8 @@ export function createProxyApp() {
               logEnabled,
               parsedAiReq!,
               maxBodySize,
-              authHeader
+              authHeader,
+              credentialRetentionDays
             );
           } else {
             // Handle regular response
@@ -332,7 +334,8 @@ export function createProxyApp() {
               isAi,
               parsedAiReq,
               maxBodySize,
-              authHeader
+              authHeader,
+              credentialRetentionDays
             );
           }
         }
@@ -391,7 +394,8 @@ async function handleStreamingResponse(
   logEnabled: boolean,
   parsedAiReq: ReturnType<typeof parseAiRequest>,
   maxBodySize: number,
-  authHeader?: string
+  authHeader?: string,
+  credentialRetentionDays?: unknown
 ): Promise<void> {
   // Set headers for SSE
   res.setHeader('Content-Type', proxyRes.headers['content-type'] || 'text/event-stream');
@@ -466,7 +470,7 @@ async function handleStreamingResponse(
         where: { id: logId },
         data: {
           statusCode: proxyRes.statusCode,
-          responseHeaders: safeJsonStringify(redactHeadersForStorage(proxyRes.headers as Record<string, unknown>)),
+          responseHeaders: safeJsonStringify(redactHeadersForStorage(proxyRes.headers as Record<string, unknown>, credentialRetentionDays)),
           responseBody: responseBodyJson,
           responseSize,
           responseTime,
@@ -499,7 +503,7 @@ async function handleStreamingResponse(
           where: { id: logId },
           data: {
             statusCode: proxyRes.statusCode,
-            responseHeaders: safeJsonStringify(redactHeadersForStorage(proxyRes.headers as Record<string, unknown>)),
+            responseHeaders: safeJsonStringify(redactHeadersForStorage(proxyRes.headers as Record<string, unknown>, credentialRetentionDays)),
             responseBody: '[Streaming response - logging failed]',
             responseSize: chunks.join('').length,
             responseTime,
@@ -529,7 +533,8 @@ async function handleRegularResponse(
   isAi: boolean,
   parsedAiReq: ReturnType<typeof parseAiRequest> | null,
   maxBodySize: number,
-  authHeader?: string
+  authHeader?: string,
+  credentialRetentionDays?: unknown
 ): Promise<void> {
   // Collect response body
   const chunks: Buffer[] = [];
@@ -637,7 +642,7 @@ async function handleRegularResponse(
       where: { id: logId },
       data: {
         statusCode: proxyRes.statusCode,
-        responseHeaders: safeJsonStringify(redactHeadersForStorage(proxyRes.headers as Record<string, unknown>)),
+        responseHeaders: safeJsonStringify(redactHeadersForStorage(proxyRes.headers as Record<string, unknown>, credentialRetentionDays)),
         responseBody,
         responseTruncated,
         responseSize,

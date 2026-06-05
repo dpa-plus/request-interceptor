@@ -1,4 +1,9 @@
 import { PrismaClient } from '../generated/prisma/index.js';
+import {
+  defaultCredentialRetentionDays,
+  defaultLogRetentionDays,
+  defaultMediaRetentionDays,
+} from './retentionConfig.js';
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -36,6 +41,9 @@ export async function initDatabase() {
         defaultTargetUrl: process.env.TARGET_URL || null,
         logEnabled: true,
         maxBodySize: 1048576,
+        logRetentionDays: defaultLogRetentionDays(),
+        credentialRetentionDays: defaultCredentialRetentionDays(),
+        mediaRetentionDays: defaultMediaRetentionDays(),
         aiDetectionEnabled: true,
       },
     });

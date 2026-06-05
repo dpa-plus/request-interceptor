@@ -164,6 +164,9 @@ model Config {
   // Logging Settings
   logEnabled    Boolean @default(true)
   maxBodySize   Int     @default(1048576)  // 1MB default
+  logRetentionDays Int   @default(30)
+  credentialRetentionDays Int @default(0)
+  mediaRetentionDays Int @default(30)
 
   // AI Detection
   aiDetectionEnabled Boolean @default(true)

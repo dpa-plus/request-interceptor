@@ -1,0 +1,87 @@
+<svg width="1200" height="300" viewBox="0 0 1200 300" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Request Interceptor use-case banner</title>
+  <desc id="desc">A compact dark banner with four polished use-case tiles for AI apps, workflows, webhooks, and routing.</desc>
+  <defs>
+    <linearGradient id="caseBg" x1="0" y1="0" x2="1200" y2="300" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#080B12"/>
+      <stop offset="0.5" stop-color="#0D1117"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+    <radialGradient id="caseGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(250 72) rotate(36) scale(410 260)">
+      <stop stop-color="#FF6100" stop-opacity="0.32"/>
+      <stop offset="0.54" stop-color="#58A6FF" stop-opacity="0.11"/>
+      <stop offset="1" stop-color="#0D1117" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="caseDots" width="22" height="22" patternUnits="userSpaceOnUse">
+      <circle cx="1" cy="1" r="1" fill="#8B949E" fill-opacity="0.16"/>
+    </pattern>
+    <filter id="caseShadow" x="-16%" y="-24%" width="132%" height="148%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#000" flood-opacity="0.42"/>
+    </filter>
+    <linearGradient id="caseStroke" x1="98" y1="190" x2="1098" y2="112" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF6100"/>
+      <stop offset="0.35" stop-color="#58A6FF"/>
+      <stop offset="0.7" stop-color="#A371F7"/>
+      <stop offset="1" stop-color="#3FB950"/>
+    </linearGradient>
+    <clipPath id="caseClip">
+      <rect width="1200" height="300" rx="28"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#caseClip)">
+    <rect width="1200" height="300" fill="url(#caseBg)"/>
+    <rect width="1200" height="300" fill="url(#caseGlow)"/>
+    <rect width="1200" height="300" fill="url(#caseDots)" opacity="0.8"/>
+    <path d="M92 198C210 136 326 150 436 170C584 197 684 180 798 132C908 86 1018 91 1114 124" stroke="url(#caseStroke)" stroke-width="4" stroke-linecap="round" stroke-opacity="0.55"/>
+
+    <text x="56" y="70" fill="#F0F6FC" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="34" font-weight="850">Drop in anywhere</text>
+    <text x="58" y="100" fill="#9BA7B4" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="16">one proxy, many traffic stories</text>
+
+    <g filter="url(#caseShadow)">
+      <g transform="translate(70 142)">
+        <rect width="242" height="112" rx="22" fill="#121923" stroke="#30363D"/>
+        <circle cx="46" cy="46" r="22" fill="#1F6FEB" fill-opacity="0.18" stroke="#58A6FF" stroke-opacity="0.65"/>
+        <svg x="34" y="34" width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <path d="M12 4L14 10L20 12L14 14L12 20L10 14L4 12L10 10L12 4Z" fill="#9ECBFF" fill-opacity="0.16" stroke="#9ECBFF" stroke-width="2.2" stroke-linejoin="round"/>
+        </svg>
+        <text x="82" y="52" fill="#F0F6FC" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="20" font-weight="800">AI apps</text>
+        <path d="M82 76H172" stroke="#58A6FF" stroke-width="7" stroke-linecap="round" opacity="0.8"/>
+      </g>
+      <g transform="translate(340 142)">
+        <rect width="242" height="112" rx="22" fill="#121923" stroke="#30363D"/>
+        <circle cx="46" cy="46" r="22" fill="#FF6100" fill-opacity="0.16" stroke="#FF6100" stroke-opacity="0.65"/>
+        <svg x="34" y="34" width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <circle cx="6" cy="7" r="2.6" fill="#FFB088"/>
+          <circle cx="18" cy="12" r="2.6" fill="#FFB088"/>
+          <circle cx="6" cy="17" r="2.6" fill="#FFB088"/>
+          <path d="M8.4 8.1L15.6 11M8.4 15.9L15.6 13" stroke="#FFB088" stroke-width="2.2" stroke-linecap="round"/>
+        </svg>
+        <text x="82" y="52" fill="#F0F6FC" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="20" font-weight="800">Workflows</text>
+        <path d="M82 76H164" stroke="#FF6100" stroke-width="7" stroke-linecap="round" opacity="0.75"/>
+      </g>
+      <g transform="translate(610 142)">
+        <rect width="242" height="112" rx="22" fill="#121923" stroke="#30363D"/>
+        <circle cx="46" cy="46" r="22" fill="#D29922" fill-opacity="0.16" stroke="#D29922" stroke-opacity="0.65"/>
+        <svg x="34" y="34" width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <path d="M6 7V12C6 15.9 9.1 19 13 19C16.9 19 20 15.9 20 12V9" stroke="#E3B341" stroke-width="2.2" stroke-linecap="round"/>
+          <path d="M16 9H20V5" stroke="#E3B341" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M10 12H16" stroke="#E3B341" stroke-width="2.2" stroke-linecap="round"/>
+        </svg>
+        <text x="82" y="52" fill="#F0F6FC" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="20" font-weight="800">Webhooks</text>
+        <path d="M82 76H176" stroke="#E3B341" stroke-width="7" stroke-linecap="round" opacity="0.76"/>
+      </g>
+      <g transform="translate(880 142)">
+        <rect width="242" height="112" rx="22" fill="#121923" stroke="#30363D"/>
+        <circle cx="46" cy="46" r="22" fill="#238636" fill-opacity="0.16" stroke="#3FB950" stroke-opacity="0.65"/>
+        <svg x="34" y="34" width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <path d="M4 12H9C13 12 13.5 7 18 7H20" stroke="#7EE787" stroke-width="2.2" stroke-linecap="round"/>
+          <path d="M4 12H9C13 12 13.5 17 18 17H20" stroke="#7EE787" stroke-width="2.2" stroke-linecap="round"/>
+          <path d="M17 4L20 7L17 10M17 14L20 17L17 20" stroke="#7EE787" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <text x="82" y="52" fill="#F0F6FC" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="20" font-weight="800">Routing</text>
+        <path d="M82 76H158" stroke="#3FB950" stroke-width="7" stroke-linecap="round" opacity="0.78"/>
+      </g>
+    </g>
+  </g>
+</svg>

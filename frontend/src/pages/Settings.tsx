@@ -7,6 +7,9 @@ interface Config {
   defaultTargetUrl: string | null;
   logEnabled: boolean;
   maxBodySize: number;
+  logRetentionDays: number;
+  credentialRetentionDays: number;
+  mediaRetentionDays: number;
   aiDetectionEnabled: boolean;
   updatedAt: string;
 }
@@ -31,6 +34,9 @@ function Settings() {
   const [defaultTargetUrl, setDefaultTargetUrl] = useState('');
   const [logEnabled, setLogEnabled] = useState(true);
   const [maxBodySize, setMaxBodySize] = useState(1048576);
+  const [logRetentionDays, setLogRetentionDays] = useState(30);
+  const [credentialRetentionDays, setCredentialRetentionDays] = useState(0);
+  const [mediaRetentionDays, setMediaRetentionDays] = useState(30);
   const [aiDetectionEnabled, setAiDetectionEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -62,6 +68,9 @@ function Settings() {
       setDefaultTargetUrl(configData.defaultTargetUrl || '');
       setLogEnabled(configData.logEnabled);
       setMaxBodySize(configData.maxBodySize);
+      setLogRetentionDays(configData.logRetentionDays ?? 30);
+      setCredentialRetentionDays(configData.credentialRetentionDays ?? 0);
+      setMediaRetentionDays(configData.mediaRetentionDays ?? 30);
       setAiDetectionEnabled(configData.aiDetectionEnabled);
       setError(null);
     } catch (err) {
@@ -83,6 +92,9 @@ function Settings() {
           defaultTargetUrl: defaultTargetUrl || null,
           logEnabled,
           maxBodySize,
+          logRetentionDays,
+          credentialRetentionDays,
+          mediaRetentionDays,
           aiDetectionEnabled,
         }),
       });
@@ -146,6 +158,9 @@ function Settings() {
         logEnabled={logEnabled}
         aiDetectionEnabled={aiDetectionEnabled}
         maxBodySize={formatBytes(maxBodySize)}
+        logRetentionDays={logRetentionDays}
+        credentialRetentionDays={credentialRetentionDays}
+        mediaRetentionDays={mediaRetentionDays}
       />
 
       {error && (
@@ -255,6 +270,41 @@ function Settings() {
                 }`}
               />
             </button>
+          </div>
+
+          <div className="border-t border-[#30363d] pt-5">
+            <div className="mb-4">
+              <h3 className="text-sm font-semibold text-gray-100">Data retention</h3>
+              <p className="mt-1 text-sm text-gray-400">
+                Cleanup runs hourly. Shorter media retention can leave old request rows with missing media previews.
+              </p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <RetentionControl
+                label="Requests"
+                value={logRetentionDays}
+                onChange={setLogRetentionDays}
+                helper="Deletes request logs and linked AI traces."
+                presets={[7, 14, 30, 90]}
+                minValue={1}
+              />
+              <RetentionControl
+                label="Credentials"
+                value={credentialRetentionDays}
+                onChange={setCredentialRetentionDays}
+                helper="Redacts auth, API key, and cookie headers."
+                presets={[0, 1, 3, 7]}
+                zeroLabel="Immediate"
+              />
+              <RetentionControl
+                label="Media"
+                value={mediaRetentionDays}
+                onChange={setMediaRetentionDays}
+                helper="Deletes stored images, audio, video, PDFs, and files."
+                presets={[1, 7, 30, 90]}
+                minValue={1}
+              />
+            </div>
           </div>
 
           {config && (
@@ -430,6 +480,9 @@ function SetupOverview({
   logEnabled,
   aiDetectionEnabled,
   maxBodySize,
+  logRetentionDays,
+  credentialRetentionDays,
+  mediaRetentionDays,
 }: {
   defaultTargetUrl: string;
   enabledRules: number;
@@ -437,9 +490,12 @@ function SetupOverview({
   logEnabled: boolean;
   aiDetectionEnabled: boolean;
   maxBodySize: string;
+  logRetentionDays: number;
+  credentialRetentionDays: number;
+  mediaRetentionDays: number;
 }) {
   return (
-    <section className="mb-6 grid gap-3 md:grid-cols-4">
+    <section className="mb-6 grid gap-3 md:grid-cols-5">
       <SetupCard
         label="Default target"
         value={defaultTargetUrl ? 'Configured' : 'Not set'}
@@ -458,6 +514,12 @@ function SetupOverview({
         value={logEnabled ? 'Enabled' : 'Paused'}
         detail={`Body cap ${maxBodySize}`}
         tone={logEnabled ? 'green' : 'red'}
+      />
+      <SetupCard
+        label="Retention"
+        value={`${logRetentionDays}d logs`}
+        detail={`${credentialRetentionDays === 0 ? 'Immediate' : `${credentialRetentionDays}d`} credentials · ${mediaRetentionDays}d media`}
+        tone="yellow"
       />
       <SetupCard
         label="AI parsing"
@@ -513,6 +575,67 @@ function SetupCard({
   return (
     <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-4">
       {content}
+    </div>
+  );
+}
+
+function RetentionControl({
+  label,
+  value,
+  onChange,
+  helper,
+  presets,
+  zeroLabel = '0 days',
+  minValue = 0,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+  helper: string;
+  presets: number[];
+  zeroLabel?: string;
+  minValue?: number;
+}) {
+  const setSafeValue = (next: number) => {
+    if (!Number.isFinite(next)) return;
+    onChange(Math.max(minValue, Math.floor(next)));
+  };
+
+  return (
+    <div className="rounded-lg border border-[#30363d] bg-[#0d1117] p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <label className="text-sm font-medium text-gray-200">{label}</label>
+          <p className="mt-1 text-xs text-gray-500">{helper}</p>
+        </div>
+        <div className="flex items-center gap-1">
+          <input
+            type="number"
+            min={minValue}
+            step={1}
+            value={value}
+            onChange={(e) => setSafeValue(Number(e.target.value))}
+            className="w-16 rounded border border-[#30363d] bg-[#161b22] px-2 py-1 text-right text-sm text-gray-200 focus:border-[#1f6feb] focus:outline-none focus:ring-1 focus:ring-[#1f6feb]"
+          />
+          <span className="text-xs text-gray-500">days</span>
+        </div>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-1">
+        {presets.map((preset) => (
+          <button
+            key={preset}
+            type="button"
+            onClick={() => setSafeValue(preset)}
+            className={`rounded px-2 py-1 text-xs font-medium ${
+              value === preset
+                ? 'bg-[#1f6feb33] text-[#58a6ff]'
+                : 'bg-[#161b22] text-gray-400 hover:bg-[#1c2333] hover:text-gray-200'
+            }`}
+          >
+            {preset === 0 ? zeroLabel : `${preset}d`}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

@@ -1,3 +1,5 @@
+import { defaultCredentialRetentionDays, normalizeRetentionDays } from './retentionConfig.js';
+
 // Sensitive header names that should never be stored in plaintext beyond the
 // configured retention window. Comparison is case-insensitive.
 const SENSITIVE_HEADERS = new Set([
@@ -29,12 +31,11 @@ export const REDACTED_VALUE = '[REDACTED]';
  * write — the UI will only ever show `[REDACTED]`. Negative values are
  * normalized to 0.
  */
-export function getAuthHeaderRetentionDays(): number {
-  const raw = process.env.AUTH_HEADER_RETENTION_DAYS;
-  if (raw === undefined || raw === '') return 0;
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n < 0) return 0;
-  return Math.floor(n);
+export function getAuthHeaderRetentionDays(configuredDays?: unknown): number {
+  if (configuredDays !== undefined && configuredDays !== null) {
+    return normalizeRetentionDays(configuredDays, defaultCredentialRetentionDays());
+  }
+  return defaultCredentialRetentionDays();
 }
 
 /**
@@ -58,8 +59,8 @@ export function redactSensitiveHeaders<T extends Record<string, unknown>>(header
  * Apply redaction conditionally based on `AUTH_HEADER_RETENTION_DAYS`. When
  * retention is 0, headers are scrubbed before they ever hit the DB.
  */
-export function redactHeadersForStorage<T extends Record<string, unknown>>(headers: T): T {
-  if (getAuthHeaderRetentionDays() === 0) {
+export function redactHeadersForStorage<T extends Record<string, unknown>>(headers: T, configuredDays?: unknown): T {
+  if (getAuthHeaderRetentionDays(configuredDays) === 0) {
     return redactSensitiveHeaders(headers);
   }
   return headers;

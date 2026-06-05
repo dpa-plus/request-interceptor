@@ -6,18 +6,37 @@ import {
   redactSensitiveHeaders,
   REDACTED_VALUE,
 } from './headerRedaction.js';
+import {
+  defaultLogRetentionDays,
+  defaultMediaRetentionDays,
+  normalizeRetentionDays,
+} from './retentionConfig.js';
 
-const LOG_RETENTION_DAYS = 30;
 // Media files orphaned from any DB row are deleted after this many days
 const MEDIA_ORPHAN_GRACE_DAYS = 1;
+
+interface CleanupConfig {
+  logRetentionDays: number;
+  credentialRetentionDays: number;
+  mediaRetentionDays: number;
+}
+
+async function getCleanupConfig(): Promise<CleanupConfig> {
+  const config = await prisma.config.findUnique({ where: { id: 'default' } }) as any;
+  return {
+    logRetentionDays: normalizeRetentionDays(config?.logRetentionDays, defaultLogRetentionDays()),
+    credentialRetentionDays: getAuthHeaderRetentionDays(config?.credentialRetentionDays),
+    mediaRetentionDays: normalizeRetentionDays(config?.mediaRetentionDays, defaultMediaRetentionDays()),
+  };
+}
 
 /**
  * Delete request logs older than the retention period.
  * Also deletes associated AiRequest records.
  */
-async function deleteOldLogs(): Promise<number> {
+async function deleteOldLogs(retentionDays: number): Promise<number> {
   const cutoffDate = new Date();
-  cutoffDate.setDate(cutoffDate.getDate() - LOG_RETENTION_DAYS);
+  cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
 
   // First delete AiRequests that are linked to old logs
   const oldLogs = await prisma.requestLog.findMany({
@@ -45,13 +64,10 @@ async function deleteOldLogs(): Promise<number> {
 
 /**
  * Remove authorization headers from logs older than the retention period.
- * Skipped entirely when AUTH_HEADER_RETENTION_DAYS=0 — in that mode headers
- * are scrubbed at write-time by the proxy, so nothing remains to clean up.
+ * A retention of 0 redacts all stored sensitive header values on the next
+ * cleanup run, which also covers changing the setting from N days to immediate.
  */
-async function sanitizeOldAuthHeaders(): Promise<number> {
-  const retentionDays = getAuthHeaderRetentionDays();
-  if (retentionDays === 0) return 0;
-
+async function sanitizeOldAuthHeaders(retentionDays: number): Promise<number> {
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
 
@@ -88,6 +104,63 @@ async function sanitizeOldAuthHeaders(): Promise<number> {
   }
 
   return sanitizedCount;
+}
+
+async function sanitizeOldAuthResponseHeaders(retentionDays: number): Promise<number> {
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+
+  const logsToSanitize = await prisma.requestLog.findMany({
+    where: {
+      createdAt: { lt: cutoffDate },
+      responseHeaders: { not: null },
+    },
+    select: { id: true, responseHeaders: true },
+  });
+
+  let sanitizedCount = 0;
+
+  for (const log of logsToSanitize) {
+    if (!log.responseHeaders) continue;
+
+    try {
+      const headers = JSON.parse(log.responseHeaders) as Record<string, unknown>;
+      const redacted = redactSensitiveHeaders(headers);
+      const wasModified = Object.keys(redacted).some(
+        (k) => redacted[k] === REDACTED_VALUE && headers[k] !== REDACTED_VALUE
+      );
+
+      if (wasModified) {
+        await prisma.requestLog.update({
+          where: { id: log.id },
+          data: { responseHeaders: JSON.stringify(redacted) },
+        });
+        sanitizedCount++;
+      }
+    } catch {
+      // Skip logs with invalid JSON headers
+    }
+  }
+
+  return sanitizedCount;
+}
+
+async function deleteExpiredMedia(retentionDays: number): Promise<number> {
+  const files = await listAllMediaFiles();
+  if (files.length === 0) return 0;
+
+  const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+  let deleted = 0;
+  for (const f of files) {
+    if (f.mtimeMs >= cutoff) continue;
+    try {
+      await fs.unlink(f.fullPath);
+      deleted++;
+    } catch {
+      // ignore
+    }
+  }
+  return deleted;
 }
 
 /**
@@ -162,14 +235,26 @@ export async function runCleanup(): Promise<void> {
   console.log('[Cleanup] Starting cleanup job...');
 
   try {
-    const deletedLogs = await deleteOldLogs();
+    const cleanupConfig = await getCleanupConfig();
+
+    const deletedLogs = await deleteOldLogs(cleanupConfig.logRetentionDays);
     if (deletedLogs > 0) {
-      console.log(`[Cleanup] Deleted ${deletedLogs} logs older than ${LOG_RETENTION_DAYS} days`);
+      console.log(`[Cleanup] Deleted ${deletedLogs} logs older than ${cleanupConfig.logRetentionDays} days`);
     }
 
-    const sanitizedHeaders = await sanitizeOldAuthHeaders();
+    const sanitizedHeaders = await sanitizeOldAuthHeaders(cleanupConfig.credentialRetentionDays);
     if (sanitizedHeaders > 0) {
-      console.log(`[Cleanup] Sanitized auth headers in ${sanitizedHeaders} logs older than ${getAuthHeaderRetentionDays()} days`);
+      console.log(`[Cleanup] Sanitized auth headers in ${sanitizedHeaders} logs older than ${cleanupConfig.credentialRetentionDays} days`);
+    }
+
+    const sanitizedResponseHeaders = await sanitizeOldAuthResponseHeaders(cleanupConfig.credentialRetentionDays);
+    if (sanitizedResponseHeaders > 0) {
+      console.log(`[Cleanup] Sanitized auth response headers in ${sanitizedResponseHeaders} logs older than ${cleanupConfig.credentialRetentionDays} days`);
+    }
+
+    const expiredMedia = await deleteExpiredMedia(cleanupConfig.mediaRetentionDays);
+    if (expiredMedia > 0) {
+      console.log(`[Cleanup] Deleted ${expiredMedia} media files older than ${cleanupConfig.mediaRetentionDays} days`);
     }
 
     const orphanMedia = await deleteOrphanMedia();
@@ -196,10 +281,5 @@ export function startCleanupScheduler(): void {
   setInterval(runCleanup, HOUR_MS);
 
   console.log('[Cleanup] Scheduler started (runs every hour)');
-  const retention = getAuthHeaderRetentionDays();
-  console.log(
-    retention === 0
-      ? '[Cleanup] Auth headers: redacted immediately at write-time (AUTH_HEADER_RETENTION_DAYS=0)'
-      : `[Cleanup] Auth headers: kept plaintext for ${retention} day(s), then redacted`
-  );
+  console.log('[Cleanup] Retention settings are read from database config with env defaults');
 }

@@ -73,7 +73,14 @@ interface OpenRouterStats {
   totalCachedTokens: number;
   totalPromptTokens: number;
   cachedPromptRatio: number;
-  byActualProvider: Array<{ provider: string; count: number; totalTokens: number; totalCostUsd: number }>;
+  byActualProvider: Array<{
+    provider: string;
+    count: number;
+    totalTokens: number;
+    totalCostUsd: number;
+    errorCount?: number;
+    avgLatencyMs?: number;
+  }>;
 }
 
 function formatCost(micros: number | null) {
@@ -429,7 +436,12 @@ function AiDashboard() {
                 <div>
                   <div className="text-xs text-gray-500 mb-1">Top upstream providers</div>
                   <UsageBars items={openrouter.byActualProvider.map((p) => ({
-                    key: p.provider, label: p.provider, count: p.count, cost: Math.round(p.totalCostUsd * 1_000_000), tokens: p.totalTokens,
+                    key: p.provider,
+                    label: p.provider,
+                    count: p.count,
+                    cost: Math.round(p.totalCostUsd * 1_000_000),
+                    tokens: p.totalTokens,
+                    meta: `${formatMs(p.avgLatencyMs || 0)} avg · ${p.count > 0 ? ((p.errorCount || 0) / p.count * 100).toFixed(1) : '0.0'}% errors`,
                   }))} />
                 </div>
               )}
@@ -465,7 +477,7 @@ function ModeRow({ label, data }: { label: string; data: { count: number; p50: n
   );
 }
 
-interface UsageItem { key: string; label: string; count: number; cost: number; tokens: number }
+interface UsageItem { key: string; label: string; count: number; cost: number; tokens: number; meta?: string }
 
 function UsageBars({ items }: { items: UsageItem[] }) {
   const top = Math.max(1, ...items.map((i) => i.cost));
@@ -477,6 +489,7 @@ function UsageBars({ items }: { items: UsageItem[] }) {
           <div className="flex items-center gap-2 text-xs">
             <span className="font-mono text-gray-200 truncate flex-1">{it.label}</span>
             <span className="text-gray-500">{it.count.toLocaleString()}</span>
+            {it.meta && <span className="text-gray-500 truncate max-w-32">{it.meta}</span>}
             <span className="text-gray-500">{formatTokens(it.tokens)}</span>
             <span className="text-green-400 font-mono w-16 text-right">{formatCost(it.cost)}</span>
           </div>

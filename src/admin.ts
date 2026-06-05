@@ -11,6 +11,12 @@ import { invalidateRoutingCache } from './lib/routing.js';
 import { readMediaFile, mimeFromExt } from './lib/mediaStorage.js';
 import { rehydrateInlineMedia } from './lib/multimodalProcessor.js';
 import {
+  defaultCredentialRetentionDays,
+  defaultLogRetentionDays,
+  defaultMediaRetentionDays,
+  normalizeRetentionDays,
+} from './lib/retentionConfig.js';
+import {
   resolveRange,
   getSummary,
   getTimeseries,
@@ -963,7 +969,15 @@ export function createAdminApp() {
   // Update config
   app.put('/api/config', async (req, res) => {
     try {
-      const { defaultTargetUrl, logEnabled, maxBodySize, aiDetectionEnabled } = req.body;
+      const {
+        defaultTargetUrl,
+        logEnabled,
+        maxBodySize,
+        aiDetectionEnabled,
+        logRetentionDays,
+        credentialRetentionDays,
+        mediaRetentionDays,
+      } = req.body;
 
       const config = await prisma.config.upsert({
         where: { id: 'default' },
@@ -972,6 +986,9 @@ export function createAdminApp() {
           ...(logEnabled !== undefined && { logEnabled }),
           ...(maxBodySize !== undefined && { maxBodySize }),
           ...(aiDetectionEnabled !== undefined && { aiDetectionEnabled }),
+          ...(logRetentionDays !== undefined && { logRetentionDays: normalizeRetentionDays(logRetentionDays, defaultLogRetentionDays()) }),
+          ...(credentialRetentionDays !== undefined && { credentialRetentionDays: normalizeRetentionDays(credentialRetentionDays, defaultCredentialRetentionDays()) }),
+          ...(mediaRetentionDays !== undefined && { mediaRetentionDays: normalizeRetentionDays(mediaRetentionDays, defaultMediaRetentionDays()) }),
         },
         create: {
           id: 'default',
@@ -979,6 +996,9 @@ export function createAdminApp() {
           logEnabled: logEnabled ?? true,
           maxBodySize: maxBodySize ?? 1048576,
           aiDetectionEnabled: aiDetectionEnabled ?? true,
+          logRetentionDays: logRetentionDays !== undefined ? normalizeRetentionDays(logRetentionDays, defaultLogRetentionDays()) : defaultLogRetentionDays(),
+          credentialRetentionDays: credentialRetentionDays !== undefined ? normalizeRetentionDays(credentialRetentionDays, defaultCredentialRetentionDays()) : defaultCredentialRetentionDays(),
+          mediaRetentionDays: mediaRetentionDays !== undefined ? normalizeRetentionDays(mediaRetentionDays, defaultMediaRetentionDays()) : defaultMediaRetentionDays(),
         },
       });
 
