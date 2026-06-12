@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import http from 'http';
 import { createAdminApp } from './admin.js';
 import { createProxyApp } from './proxy.js';

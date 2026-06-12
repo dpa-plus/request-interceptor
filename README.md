@@ -181,6 +181,17 @@ Priority order:
 3. dashboard routing rules
 4. default target URL
 
+## Tag Requests By Project
+
+Add an optional `Project-Tag` header to any proxied request to label which project or service it came from:
+
+```bash
+curl "http://localhost:3101/api/users?__target=https://api.example.com" \
+  -H "Project-Tag: checkout-service"
+```
+
+The tag is stored with the request and shown as a chip in the dashboard (left of the timestamp, next to the AI model). Click a chip — or pass `?projectTag=checkout-service` to `/api/logs` — to filter the stream down to one project. Like `X-Target-URL`, the `Project-Tag` header is stripped before the request is forwarded upstream.
+
 ## Intercept An AI Call
 
 ```bash

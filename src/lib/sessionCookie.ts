@@ -47,23 +47,26 @@ function hmac(secret: Buffer, payload: string): string {
 
 /**
  * Sign a session payload into a compact `<b64-payload>.<b64-sig>` string.
+ *
+ * `secret` lets callers inject a signing key (basic-auth mode derives its own
+ * from the admin credentials); when omitted the OAuth `SESSION_SECRET` is used.
  */
-export function signSession(payload: Omit<SessionPayload, 'iat' | 'exp'>): string {
+export function signSession(payload: Omit<SessionPayload, 'iat' | 'exp'>, secret?: Buffer): string {
   const now = Math.floor(Date.now() / 1000);
   const full: SessionPayload = { ...payload, iat: now, exp: now + SESSION_TTL_SECONDS };
   const encoded = b64urlEncode(Buffer.from(JSON.stringify(full), 'utf-8'));
-  const sig = hmac(getSecret(), encoded);
+  const sig = hmac(secret ?? getSecret(), encoded);
   return `${encoded}.${sig}`;
 }
 
-export function verifySession(token: string | undefined | null): SessionPayload | null {
+export function verifySession(token: string | undefined | null, secret?: Buffer): SessionPayload | null {
   if (!token) return null;
   const parts = token.split('.');
   if (parts.length !== 2) return null;
   const [encoded, sig] = parts;
   let expectedSig: string;
   try {
-    expectedSig = hmac(getSecret(), encoded);
+    expectedSig = hmac(secret ?? getSecret(), encoded);
   } catch {
     return null;
   }

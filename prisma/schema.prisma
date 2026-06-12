@@ -34,6 +34,11 @@ model RequestLog {
   routeSource   String   // "query_param" | "config_rule" | "default"
   routeRuleId   String?  // Falls Config-Regel
 
+  // Optional caller-supplied label (from the `Project-Tag` request header).
+  // Stripped before forwarding upstream; used to group/identify traffic by
+  // project in the dashboard.
+  projectTag    String?
+
   // AI-spezifisch
   isAiRequest   Boolean  @default(false)
   aiRequestId   String?  @unique
@@ -49,6 +54,7 @@ model RequestLog {
   @@index([isAiRequest])
   @@index([targetUrl])
   @@index([statusCode])
+  @@index([projectTag])
 }
 
 model AiRequest {

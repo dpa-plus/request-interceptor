@@ -12,38 +12,35 @@ import { apiFetch } from './utils/apiFetch';
 type AuthState =
   | { status: 'loading' }
   | { status: 'authed'; mode: 'basic' | 'google'; user: { name?: string; email?: string; picture?: string } }
-  | { status: 'unauthed'; loginUrl: string };
+  | { status: 'unauthed'; mode: 'basic' | 'google'; loginUrl: string };
 
 function App() {
   const [auth, setAuth] = useState<AuthState>({ status: 'loading' });
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await apiFetch('/api/auth/me', { credentials: 'same-origin' });
-        if (cancelled) return;
-        if (res.ok) {
-          const data = await res.json();
-          setAuth({ status: 'authed', mode: data.mode, user: data.user || {} });
-        } else if (res.status === 401) {
-          const data = await res.json().catch(() => ({}));
-          if (data?.requiresLogin && data?.loginUrl) {
-            setAuth({ status: 'unauthed', loginUrl: data.loginUrl });
-          } else {
-            // Basic-auth mode: the browser will handle the WWW-Authenticate prompt,
-            // so just reload to trigger it. Once the user types creds the next
-            // /api/auth/me call will succeed.
-            setAuth({ status: 'authed', mode: 'basic', user: {} });
-          }
-        } else {
-          setAuth({ status: 'authed', mode: 'basic', user: {} });
-        }
-      } catch {
-        if (!cancelled) setAuth({ status: 'authed', mode: 'basic', user: {} });
+  const checkAuth = async () => {
+    try {
+      const res = await apiFetch('/api/auth/me', { credentials: 'same-origin' });
+      if (res.ok) {
+        const data = await res.json();
+        setAuth({ status: 'authed', mode: data.mode, user: data.user || {} });
+      } else if (res.status === 401) {
+        const data = await res.json().catch(() => ({}));
+        setAuth({
+          status: 'unauthed',
+          mode: data?.mode === 'google' ? 'google' : 'basic',
+          loginUrl: data?.loginUrl || '/api/auth/login',
+        });
+      } else {
+        setAuth({ status: 'unauthed', mode: 'basic', loginUrl: '/api/auth/login' });
       }
-    })();
-    return () => { cancelled = true; };
+    } catch {
+      setAuth({ status: 'unauthed', mode: 'basic', loginUrl: '/api/auth/login' });
+    }
+  };
+
+  useEffect(() => {
+    checkAuth();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (auth.status === 'loading') {
@@ -55,7 +52,7 @@ function App() {
   }
 
   if (auth.status === 'unauthed') {
-    return <LoginScreen loginUrl={auth.loginUrl} />;
+    return <LoginScreen mode={auth.mode} loginUrl={auth.loginUrl} onLoggedIn={checkAuth} />;
   }
 
   return (
@@ -128,7 +125,8 @@ function UserMenu({ auth }: { auth: Extract<AuthState, { status: 'authed' }> }) 
     window.location.href = '/';
   };
 
-  if (auth.mode === 'basic' || !auth.user.email) {
+  const label = auth.user.email || auth.user.name;
+  if (!label) {
     return null;
   }
   return (
@@ -137,10 +135,10 @@ function UserMenu({ auth }: { auth: Extract<AuthState, { status: 'authed' }> }) 
         <img src={auth.user.picture} alt="" className="w-6 h-6 rounded-full" referrerPolicy="no-referrer" />
       ) : (
         <div className="w-6 h-6 rounded-full bg-[#1f6feb33] text-[#58a6ff] flex items-center justify-center text-xs font-bold">
-          {(auth.user.email || '?').charAt(0).toUpperCase()}
+          {label.charAt(0).toUpperCase()}
         </div>
       )}
-      <span className="text-xs text-gray-400 hidden sm:inline truncate max-w-[10rem]">{auth.user.email}</span>
+      <span className="text-xs text-gray-400 hidden sm:inline truncate max-w-[10rem]">{label}</span>
       <button
         onClick={handleLogout}
         className="px-2 py-1 text-xs rounded text-gray-400 hover:text-gray-200 hover:bg-[#1c2333] transition-colors"

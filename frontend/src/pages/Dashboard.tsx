@@ -29,6 +29,7 @@ interface RequestLog {
   targetUrl: string;
   routeSource: string;
   isAiRequest: boolean;
+  projectTag: string | null;
   createdAt: string;
   error: string | null;
   aiRequest: AiRequestSummary | null;
@@ -185,6 +186,7 @@ function Dashboard() {
   const sortBy = searchParams.get('sort') || '';
   const sortDir = searchParams.get('dir') === 'asc' ? 'asc' : 'desc';
   const promptHashFilter = searchParams.get('promptHash') || '';
+  const projectTagFilter = searchParams.get('projectTag') || '';
 
   // Pinned requests (persisted in localStorage)
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(() => {
@@ -293,6 +295,7 @@ function Dashboard() {
         targetUrl: event.targetUrl,
         routeSource: event.routeSource,
         isAiRequest: event.isAiRequest,
+        projectTag: event.projectTag ?? null,
         createdAt: event.createdAt,
         error: null,
         aiRequest: null,
@@ -346,6 +349,7 @@ function Dashboard() {
       if (statusFilter) params.set('status', statusFilter);
       if (searchQuery) params.set('search', searchQuery);
       if (promptHashFilter) params.set('systemPromptHash', promptHashFilter);
+      if (projectTagFilter) params.set('projectTag', projectTagFilter);
 
       // Time range → from/to params for backend
       if (timeRange) {
@@ -412,7 +416,7 @@ function Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, [filter, methodFilter, statusFilter, searchQuery, timeRange, pinnedIds, promptHashFilter]);
+  }, [filter, methodFilter, statusFilter, searchQuery, timeRange, pinnedIds, promptHashFilter, projectTagFilter]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
@@ -426,6 +430,7 @@ function Dashboard() {
       if (filter === 'ai') params.set('isAiRequest', 'true');
       if (filter === 'regular') params.set('isAiRequest', 'false');
       if (methodFilter) params.set('method', methodFilter);
+      if (projectTagFilter) params.set('projectTag', projectTagFilter);
 
       const response = await apiFetch(`/api/logs?${params}`);
       if (!response.ok) throw new Error('Failed to fetch more logs');
@@ -443,7 +448,7 @@ function Dashboard() {
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, hasMore, logs.length, filter, methodFilter]);
+  }, [loadingMore, hasMore, logs.length, filter, methodFilter, projectTagFilter]);
 
   useEffect(() => {
     fetchLogs();
@@ -657,7 +662,7 @@ function Dashboard() {
             </svg>
             <input
               type="text"
-              placeholder="Search path, URL, model..."
+              placeholder="Search path, URL, project..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-8 pr-2 py-1.5 border border-[#30363d] rounded text-xs bg-[#0d1117] text-gray-200 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-[#1f6feb]"
@@ -767,8 +772,20 @@ function Dashboard() {
                 </button>
               );
             })()}
+            {/* Active project-tag filter pill */}
+            {projectTagFilter && (
+              <button
+                onClick={() => updateParam('projectTag', '')}
+                title={`Clear project filter (${projectTagFilter})`}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs border bg-emerald-900/40 text-emerald-300 border-emerald-700"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                <span className="truncate max-w-[140px]">{projectTagFilter}</span>
+                <span className="text-gray-500">×</span>
+              </button>
+            )}
             {/* Clear */}
-            {(searchQuery || filter !== 'all' || methodFilter || statusFilter || timeRange || promptHashFilter) && (
+            {(searchQuery || filter !== 'all' || methodFilter || statusFilter || timeRange || promptHashFilter || projectTagFilter) && (
               <button
                 onClick={() => setSearchParams(new URLSearchParams())}
                 className="px-2 py-1.5 text-xs text-gray-500 hover:text-gray-200"
@@ -793,13 +810,14 @@ function Dashboard() {
         {/* Column headers (only in full-width mode) */}
         {!showRightPane && (
           <div className="grid border-b border-[#30363d] text-[13px] font-bold text-gray-300 uppercase tracking-wider select-none bg-[#161b22] px-3 py-2.5"
-            style={{ gridTemplateColumns: '24px 64px 60px minmax(0,1fr) 80px 160px 80px', gap: '0 16px' }}>
+            style={{ gridTemplateColumns: '24px 64px 60px minmax(0,1fr) 80px 160px 120px 80px', gap: '0 16px' }}>
             <span />
             <span>Method</span>
             <span>Status</span>
             <span>Path</span>
             <span className="text-right">Time</span>
             <span className="text-right">AI</span>
+            <span className="text-right">Project</span>
             <span className="text-right">When</span>
           </div>
         )}
@@ -823,7 +841,7 @@ function Dashboard() {
               const isToday = ts.toDateString() === new Date().toDateString();
               const timeStr = isToday ? ts.toLocaleTimeString() : `${ts.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })} ${ts.toLocaleTimeString()}`;
               const rowStyle: React.CSSProperties = {
-                gridTemplateColumns: '24px 64px 60px minmax(0,1fr) 80px 160px 80px',
+                gridTemplateColumns: '24px 64px 60px minmax(0,1fr) 80px 160px 120px 80px',
                 columnGap: '16px',
                 ...(groupColor && !isActive ? { borderLeftColor: groupColor } : {}),
               };
@@ -865,6 +883,21 @@ function Dashboard() {
                     ) : log.isAiRequest ? (
                       <span className="px-1.5 py-0.5 rounded bg-purple-900/40 text-purple-300 text-[11px]">AI</span>
                     ) : null}
+                  </span>
+                  <span className="text-right flex items-center justify-end min-w-0">
+                    {log.projectTag && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); updateParam('projectTag', projectTagFilter === log.projectTag ? '' : log.projectTag!); }}
+                        className={`px-1.5 py-0.5 rounded text-[11px] truncate min-w-0 max-w-full border transition-colors hover:brightness-125 ${
+                          projectTagFilter === log.projectTag
+                            ? 'bg-emerald-700/60 text-emerald-100 border-emerald-500'
+                            : 'bg-emerald-900/40 text-emerald-300 border-transparent'
+                        }`}
+                        title={`Project: ${log.projectTag}`}
+                      >
+                        {log.projectTag}
+                      </button>
+                    )}
                   </span>
                   <span className="text-gray-500 text-[12px] text-right">{timeStr.split(' ').pop()}</span>
                 </div>

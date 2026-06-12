@@ -181,6 +181,22 @@ for i in {1..3}; do
     "$PROXY/anything/api/products/$i?__target=$TARGET"
 done
 
+# --- Group 8: Project-Tag header (groups traffic by project in the dashboard) ---
+echo ""
+echo "[8/8] Sending requests tagged with a Project-Tag header..."
+for tag in checkout-service billing-worker data-pipeline; do
+  curl -s -o /dev/null -w "  GET /get (Project-Tag: $tag) -> %{http_code}\n" \
+    "$PROXY/get?__target=$TARGET" \
+    -H "Project-Tag: $tag"
+done
+
+# A tagged AI request, so the project tag shows alongside the model chip
+curl -s -o /dev/null -w "  POST /v1/chat/completions (Project-Tag: billing-worker) -> %{http_code}\n" \
+  -X POST "$PROXY/v1/chat/completions?__target=$TARGET" \
+  -H "Content-Type: application/json" \
+  -H "Project-Tag: billing-worker" \
+  -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"Summarize this invoice"}]}'
+
 echo ""
 echo "========================================="
 echo "  Done! Check http://localhost:3100"

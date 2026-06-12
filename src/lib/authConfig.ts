@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { Request } from 'express';
 
 export type AuthMode = 'basic' | 'google';
@@ -6,6 +7,21 @@ export function getAuthMode(): AuthMode {
   const raw = (process.env.OAUTH_PROVIDER || '').toLowerCase().trim();
   if (raw === 'google') return 'google';
   return 'basic';
+}
+
+/**
+ * Signing key for basic-mode session cookies (the form login). Prefers an
+ * explicit SESSION_SECRET; otherwise derives a stable key from the admin
+ * credentials so no extra env var is needed for the simple `docker compose up`
+ * flow. Tying it to the password means changing ADMIN_PASSWORD invalidates
+ * existing sessions, which is the behavior you'd want.
+ */
+export function getBasicSessionSecret(): Buffer {
+  const explicit = process.env.SESSION_SECRET;
+  if (explicit && explicit.length >= 32) return Buffer.from(explicit, 'utf-8');
+  const user = process.env.ADMIN_USER || 'admin';
+  const pass = process.env.ADMIN_PASSWORD || 'changeme';
+  return crypto.createHash('sha256').update(`ri-basic-session:${user}:${pass}`).digest();
 }
 
 function splitCsv(value: string | undefined): string[] {

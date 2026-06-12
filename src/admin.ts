@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { prisma } from './lib/prisma.js';
-import { adminAuth, rateLimiter } from './middleware/adminAuth.js';
+import { adminAuth, rateLimiter, verifyBasicCredentials, buildBasicSessionCookie } from './middleware/adminAuth.js';
 import { getModelInfo as getOpenRouterModelInfo, getAllModels, getCacheStats as getOpenRouterCacheStats, refreshCache as refreshOpenRouterCache } from './lib/openRouterModels.js';
 import { getModelInfo, getContextLength } from './lib/modelInfoService.js';
 import { invalidateRoutingCache } from './lib/routing.js';
@@ -25,7 +25,7 @@ import {
   getOpenRouterStats,
   Bucket,
 } from './lib/stats.js';
-import { getAuthMode, getGoogleConfig, isAccountAllowed, resolvePublicAdminUrl, isHttpsRequest } from './lib/authConfig.js';
+import { getAuthMode, getBasicSessionSecret, getGoogleConfig, isAccountAllowed, resolvePublicAdminUrl, isHttpsRequest } from './lib/authConfig.js';
 import {
   buildSessionCookie,
   buildClearSessionCookie,
@@ -83,24 +83,45 @@ export function createAdminApp() {
     const mode = getAuthMode();
     res.json({
       mode,
-      loginUrl: mode === 'google' ? '/auth/google/login' : null,
+      loginUrl: mode === 'google' ? '/auth/google/login' : '/api/auth/login',
     });
+  });
+
+  // Public: log in with admin username/password (basic mode only). Sets a
+  // signed session cookie so the SPA + password managers work without the
+  // native browser auth dialog.
+  app.post('/api/auth/login', (req, res) => {
+    if (getAuthMode() !== 'basic') {
+      res.status(404).json({ error: 'Form login is disabled when OAuth is enabled.' });
+      return;
+    }
+    const username = typeof req.body?.username === 'string' ? req.body.username : '';
+    const password = typeof req.body?.password === 'string' ? req.body.password : '';
+    if (!verifyBasicCredentials(username, password)) {
+      res.status(401).json({ error: 'Invalid username or password.' });
+      return;
+    }
+    res.setHeader('Set-Cookie', buildBasicSessionCookie(isHttpsRequest(req)));
+    res.json({ ok: true, mode: 'basic', user: { name: username } });
   });
 
   // Public: current session info, or 401 if unauthenticated.
   app.get('/api/auth/me', (req, res) => {
     const mode = getAuthMode();
     if (mode === 'basic') {
-      // In basic mode the browser handles the prompt — if the request reaches
-      // here it's because the user is already authenticated by basicAuth at
-      // the /api/* layer. For /api/auth/me we'd never get here without basic
-      // auth either; fall through to a static "basic" identity.
+      // Authenticated either by a session cookie (form login) or a Basic header
+      // (curl / API clients). adminAuth enforces the same two paths. Dashboard
+      // requests (X-Dashboard) are cookie-only so a stale cached Basic header
+      // can't suppress the login screen after the cookie is cleared.
+      const session = verifySession(readSessionFromHeader(req.headers.cookie), getBasicSessionSecret());
+      const isDashboard = req.headers['x-dashboard'] === '1';
       const header = (req.headers.authorization || '') as string;
-      if (!header.toLowerCase().startsWith('basic ')) {
-        res.status(401).json({ requiresLogin: false, mode: 'basic' });
+      const hasBasic = !isDashboard && header.toLowerCase().startsWith('basic ');
+      if (session || hasBasic) {
+        res.json({ mode: 'basic', user: { name: session?.name || process.env.ADMIN_USER || 'admin' } });
         return;
       }
-      res.json({ mode: 'basic', user: { name: process.env.ADMIN_USER || 'admin' } });
+      res.status(401).json({ requiresLogin: true, loginUrl: '/api/auth/login', mode: 'basic' });
       return;
     }
     // Google mode
@@ -223,12 +244,14 @@ export function createAdminApp() {
       const search = req.query.search as string;
       const statusFilter = req.query.status as string; // "2xx", "3xx", "4xx", "5xx", "errors"
       const systemPromptHash = req.query.systemPromptHash as string;
+      const projectTag = req.query.projectTag as string;
 
       const where: any = {};
 
       if (method) where.method = method;
       if (isAiRequest !== undefined) where.isAiRequest = isAiRequest === 'true';
       if (targetUrl) where.targetUrl = { contains: targetUrl };
+      if (projectTag) where.projectTag = projectTag;
       if (systemPromptHash) where.aiRequest = { systemPromptHash };
       if (from || to) {
         where.createdAt = {};
@@ -240,6 +263,7 @@ export function createAdminApp() {
           { url: { contains: search } },
           { path: { contains: search } },
           { body: { contains: search } },
+          { projectTag: { contains: search } },
         ];
       }
       // Status code filtering

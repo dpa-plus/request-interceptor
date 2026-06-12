@@ -145,6 +145,24 @@ function shouldSkipLogging(path: string): boolean {
   return SKIP_LOGGING_EXTENSIONS.some(ext => lowerPath.endsWith(ext));
 }
 
+// Optional caller-supplied label. Like X-Target-URL it is an interceptor-control
+// header and is stripped before the request is forwarded upstream.
+const PROJECT_TAG_HEADER = 'project-tag';
+const MAX_PROJECT_TAG_LENGTH = 200;
+
+/**
+ * Read the optional `Project-Tag` header, normalized to a trimmed string
+ * (length-capped) or null when absent/empty.
+ */
+function extractProjectTag(headers: http.IncomingHttpHeaders): string | null {
+  const raw = headers[PROJECT_TAG_HEADER];
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return trimmed.slice(0, MAX_PROJECT_TAG_LENGTH);
+}
+
 export function createProxyApp() {
   const app = express();
 
@@ -176,6 +194,9 @@ export function createProxyApp() {
       const aiDetectionEnabled = config?.aiDetectionEnabled ?? true;
       const credentialRetentionDays = (config as any)?.credentialRetentionDays;
 
+      // Optional caller-supplied project label (stripped before forwarding)
+      const projectTag = extractProjectTag(req.headers);
+
       // Resolve target
       const targetResult = await resolveTarget(req);
 
@@ -195,6 +216,7 @@ export function createProxyApp() {
               bodySize: size,
               targetUrl: '',
               routeSource: 'default',
+              projectTag,
               statusCode: 400,
               responseTime: Date.now() - startTime,
               error: targetResult.message,
@@ -260,6 +282,7 @@ export function createProxyApp() {
             targetUrl,
             routeSource: source,
             routeRuleId: ruleId,
+            projectTag,
             isAiRequest: isAi,
           },
         });
@@ -274,6 +297,7 @@ export function createProxyApp() {
           targetUrl,
           routeSource: source,
           isAiRequest: isAi,
+          projectTag,
           createdAt: log.createdAt.toISOString(),
         });
       }
@@ -281,9 +305,10 @@ export function createProxyApp() {
       // Prepare headers for proxy request
       const proxyHeaders: Record<string, string> = {};
       for (const [key, value] of Object.entries(req.headers)) {
-        if (key.toLowerCase() === 'host') {
+        const lowerKey = key.toLowerCase();
+        if (lowerKey === 'host') {
           proxyHeaders[key] = parsedTarget.host;
-        } else if (key.toLowerCase() !== 'connection' && key.toLowerCase() !== 'content-length') {
+        } else if (lowerKey !== 'connection' && lowerKey !== 'content-length' && lowerKey !== PROJECT_TAG_HEADER) {
           proxyHeaders[key] = Array.isArray(value) ? value.join(', ') : (value as string);
         }
       }

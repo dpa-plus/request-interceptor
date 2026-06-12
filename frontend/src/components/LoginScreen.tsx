@@ -1,12 +1,14 @@
+import { useState } from 'react';
+import { apiFetch } from '../utils/apiFetch';
+
 interface LoginScreenProps {
+  mode: 'basic' | 'google';
   loginUrl: string;
+  onLoggedIn?: () => void;
   error?: string | null;
 }
 
-export function LoginScreen({ loginUrl, error }: LoginScreenProps) {
-  const returnTo = window.location.pathname + window.location.search;
-  const href = `${loginUrl}?returnTo=${encodeURIComponent(returnTo)}`;
-
+export function LoginScreen({ mode, loginUrl, onLoggedIn, error }: LoginScreenProps) {
   return (
     <div className="h-full w-full bg-[#0d1117] flex items-center justify-center px-4">
       <div className="max-w-sm w-full bg-[#161b22] border border-[#30363d] rounded-lg p-6 shadow-xl">
@@ -24,19 +26,105 @@ export function LoginScreen({ loginUrl, error }: LoginScreenProps) {
           </div>
         )}
 
-        <a
-          href={href}
-          className="flex items-center justify-center gap-3 w-full px-4 py-2.5 rounded-md bg-white text-gray-800 hover:bg-gray-100 transition-colors font-medium text-sm shadow-sm"
-        >
-          <GoogleIcon />
-          <span>Sign in with Google</span>
-        </a>
-
-        <p className="mt-4 text-xs text-gray-600 text-center">
-          Access is restricted to allow-listed accounts.
-        </p>
+        {mode === 'basic'
+          ? <BasicLoginForm onLoggedIn={onLoggedIn} />
+          : <GoogleLoginButton loginUrl={loginUrl} />}
       </div>
     </div>
+  );
+}
+
+function BasicLoginForm({ onLoggedIn }: { onLoggedIn?: () => void }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setFormError(null);
+    try {
+      const res = await apiFetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ username, password }),
+      });
+      if (res.ok) {
+        if (onLoggedIn) onLoggedIn();
+        else window.location.reload();
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      setFormError(data?.error || 'Sign-in failed. Please try again.');
+    } catch {
+      setFormError('Could not reach the server. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    // method/action are set so password managers reliably detect this as a
+    // login form and offer to fill / save credentials; submission is handled
+    // in JS via onSubmit (preventDefault).
+    <form method="post" action="/api/auth/login" onSubmit={handleSubmit} className="flex flex-col gap-3">
+      {formError && (
+        <div className="px-3 py-2 rounded border border-red-800/50 bg-red-900/20 text-red-300 text-sm">
+          {formError}
+        </div>
+      )}
+      <label className="flex flex-col gap-1">
+        <span className="text-xs font-medium text-gray-400">Username</span>
+        <input
+          type="text"
+          name="username"
+          autoComplete="username"
+          autoFocus
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          className="px-3 py-2 rounded-md bg-[#0d1117] border border-[#30363d] text-sm text-gray-200 focus:outline-none focus:border-[#58a6ff]"
+        />
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className="text-xs font-medium text-gray-400">Password</span>
+        <input
+          type="password"
+          name="password"
+          autoComplete="current-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="px-3 py-2 rounded-md bg-[#0d1117] border border-[#30363d] text-sm text-gray-200 focus:outline-none focus:border-[#58a6ff]"
+        />
+      </label>
+      <button
+        type="submit"
+        disabled={submitting}
+        className="mt-1 w-full px-4 py-2.5 rounded-md bg-[#1f6feb] hover:bg-[#1a5fd4] disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium text-sm transition-colors"
+      >
+        {submitting ? 'Signing in…' : 'Sign in'}
+      </button>
+    </form>
+  );
+}
+
+function GoogleLoginButton({ loginUrl }: { loginUrl: string }) {
+  const returnTo = window.location.pathname + window.location.search;
+  const href = `${loginUrl}?returnTo=${encodeURIComponent(returnTo)}`;
+  return (
+    <>
+      <a
+        href={href}
+        className="flex items-center justify-center gap-3 w-full px-4 py-2.5 rounded-md bg-white text-gray-800 hover:bg-gray-100 transition-colors font-medium text-sm shadow-sm"
+      >
+        <GoogleIcon />
+        <span>Sign in with Google</span>
+      </a>
+      <p className="mt-4 text-xs text-gray-600 text-center">
+        Access is restricted to allow-listed accounts.
+      </p>
+    </>
   );
 }
 

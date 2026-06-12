@@ -9,6 +9,7 @@ export interface RequestStartEvent {
   targetUrl: string;
   routeSource: string;
   isAiRequest: boolean;
+  projectTag: string | null;
   createdAt: string;
 }
 
