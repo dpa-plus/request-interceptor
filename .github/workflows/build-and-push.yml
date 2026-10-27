@@ -12,9 +12,15 @@ on:
 env:
   REGISTRY: ghcr.io
 
+# Folge-Pushes warten auf den laufenden Lauf (Build/Deploy nie abbrechen).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   version:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: github.ref == 'refs/heads/main'
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -33,6 +39,7 @@ jobs:
 
   build-and-push:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [version]
     if: always() && !cancelled()
     permissions:
